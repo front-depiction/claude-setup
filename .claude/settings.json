@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "Effect TypeScript Project",
+    "description": "Functional programming with Effect TypeScript"
+  },
+  "defaults": {
+    "model": "sonnet"
+  },
+  "agents": {
+    "autoInvoke": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path' | { read file_path; if echo \"$file_path\" | grep -qE '\\.(ts|tsx)$'; then bun run format && bun run lint && bun run typecheck; fi; }",
+            "description": "Format, lint, and typecheck TypeScript files immediately after editing"
+          }
+        ]
+      }
+    ]
+  }
+}
