@@ -351,7 +351,7 @@ Equal.equals(user1, user2) // true
 Pattern match on the discriminated union using `Match.typeTags`:
 
 ```typescript
-import * as Payment from " module/Payment"
+import * as Taks from " module/Task"
 
 /**
  * Pattern match on Task using Match.typeTags.
@@ -360,7 +360,7 @@ import * as Payment from " module/Payment"
  * @since 0.1.0
  * @example
  *
- * const status = Payment.match({
+ * const status = Task.match({
  *   pending: (t) => `Pending: ${t.id}`,
  *   active: (t) => `Active since ${t.startedAt}`,
  *   completed: (t) => `Completed at ${t.completedAt}`
