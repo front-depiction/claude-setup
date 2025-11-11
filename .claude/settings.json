@@ -10,15 +10,110 @@
   "agents": {
     "autoInvoke": true
   },
+  "permissions": {
+    "allow": [
+      "Bash(bunx tsc:*)",
+      "mcp__effect-docs__effect_docs_search",
+      "mcp__effect-docs__get_effect_doc",
+      "Bash(AGENT_ID=\"test-agent\" bun run:*)",
+      "Bash(.claude/scripts/await-mailbox-wrapper.sh)",
+      "Bash(EXIT=$?)",
+      "Bash(echo:*)",
+      "Bash(cat:*)",
+      "Edit(.claude/**/*)",
+      "Write(.claude/**/*)",
+      "Bash(bun add:*)"
+    ]
+  },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-init.sh",
+            "description": "Provide project context: structure, git status, and recent commits"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/skill-suggester.sh",
+            "description": "Suggest relevant Effect TS skills"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-init.sh",
+            "description": "Provide subagent with project context"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|Udate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/file-lock-enforcer.sh",
+            "description": "Enforce file locks to prevent conflicts"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/tool-logger.sh",
+            "description": "Log all tool usage"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/mailbox-reader.sh",
+            "description": "Check agent mailbox for requests"
+          }
+        ]
+      },
       {
         "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path' | { read file_path; if echo \"$file_path\" | grep -qE '\\.(ts|tsx)$'; then bun run format && bun run lint && bun run typecheck; fi; }",
-            "description": "Format, lint, and typecheck TypeScript files immediately after editing"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/file-lock-tracker.sh",
+            "description": "Track file modifications"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-cleanup.sh",
+            "description": "Run quality checks and release locks"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-cleanup.sh",
+            "description": "Cleanup after subagent completes"
           }
         ]
       }

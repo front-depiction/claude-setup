@@ -1,0 +1,6 @@
+Initial content for parallel test
+Line 1
+Line 2
+
+BETA WAS HERE
+ALPHA WAS HERE

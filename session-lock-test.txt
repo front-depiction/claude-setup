@@ -1,0 +1,5 @@
+Testing session-based locking
+Line 1
+Line 2
+Line 3 - Edit by same session
+Subagent edit from same session

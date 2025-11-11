@@ -1,3 +1,4 @@
+// [LOCKED by 1ec7ad43-a10c-41f8-95b4-4f00fdc98b88 @ 2025-11-10T16:00:47.866Z]
 ---
 name: effect-expert
 description: Implements Effect services, layers, dependency injection, and error handling following Effect best practices
@@ -27,6 +28,81 @@ Use these to reference:
 3. **Manage dependency graphs** through layer composition
 4. **Handle errors** with tagged error classes
 5. **Avoid requirement leakage** - services should not expose dependencies
+6. **Use Effect Platform modules** for cross-platform operations
+
+## Platform Abstraction
+
+**ALWAYS use @effect/platform modules instead of direct platform APIs:**
+
+### Use Effect Platform Modules
+
+```typescript
+// ✅ CORRECT - Effect Platform abstractions
+import { FileSystem, Path } from "@effect/platform"
+import { Command, CommandExecutor } from "@effect/platform"
+import { Terminal } from "@effect/platform"
+
+// File operations
+const fs = yield* FileSystem.FileSystem
+const content = yield* fs.readFileString("file.txt")
+
+// CLI argument parsing (use @effect/cli)
+import { Args, Command as CliCommand, CliApp } from "@effect/cli"
+const args = Args.text({ name: "input" })
+
+// Terminal I/O
+const terminal = yield* Terminal.Terminal
+yield* terminal.display("Hello\n")
+
+// Process spawning
+const executor = yield* CommandExecutor.CommandExecutor
+const cmd = Command.make("ls", "-la")
+yield* executor.start(cmd)
+```
+
+### Avoid Direct Platform APIs
+
+```typescript
+// ❌ WRONG - Direct Bun/Node APIs
+import * as fs from "fs"
+const content = fs.readFileSync("file.txt", "utf-8")
+
+// ❌ WRONG - process.argv directly
+const args = process.argv.slice(2)
+
+// ❌ WRONG - Bun-specific APIs
+const stream = Bun.stdin.stream()
+const file = Bun.file("path")
+
+// ❌ WRONG - Node-specific child_process
+import { spawn } from "child_process"
+const proc = spawn("ls", ["-la"])
+
+// ❌ WRONG - console.log directly
+console.log("message")
+```
+
+### Why Effect Platform?
+
+1. **Cross-platform**: Works with Bun, Node, browsers
+2. **Type-safe**: Full Effect error tracking
+3. **Testable**: Easy to mock/stub services
+4. **Resource-safe**: Automatic cleanup with Scope
+5. **Composable**: Integrates with Effect services/layers
+
+### Platform Modules Reference
+
+| Need | Use | Not |
+|------|-----|-----|
+| File I/O | `FileSystem.FileSystem` | `fs`, `Bun.file` |
+| Paths | `Path.Path` | `path`, manual string concat |
+| CLI args | `@effect/cli` Args | `process.argv` |
+| Terminal I/O | `Terminal.Terminal` | `console.log`, `process.stdout` |
+| Processes | `Command` + `CommandExecutor` | `child_process`, `Bun.spawn` |
+| HTTP client | `HttpClient.HttpClient` | `fetch`, `axios` |
+| Streams | `Stream` from effect | Node streams, Bun streams |
+
+Always prefer Effect Platform abstractions for portability and type safety.
 
 ## Service Design Principles
 

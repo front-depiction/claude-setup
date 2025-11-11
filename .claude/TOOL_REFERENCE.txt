@@ -1,0 +1,229 @@
+===========================================
+Claude Code - Available Tools Reference
+===========================================
+
+## FILE OPERATIONS
+
+Read
+----
+{
+  "file_path": "string (required, absolute path)",
+  "offset": "number (optional, line number to start)",
+  "limit": "number (optional, number of lines)"
+}
+
+Write
+-----
+{
+  "file_path": "string (required, absolute path)",
+  "content": "string (required)"
+}
+
+Edit
+----
+{
+  "file_path": "string (required, absolute path)",
+  "old_string": "string (required)",
+  "new_string": "string (required)",
+  "replace_all": "boolean (optional, default false)"
+}
+
+NotebookEdit
+------------
+{
+  "notebook_path": "string (required, absolute path)",
+  "new_source": "string (required)",
+  "cell_id": "string (optional)",
+  "cell_type": "code|markdown (optional)",
+  "edit_mode": "replace|insert|delete (optional)"
+}
+
+## SEARCH OPERATIONS
+
+Glob
+----
+{
+  "pattern": "string (required, e.g. '**/*.ts')",
+  "path": "string (optional, directory to search)"
+}
+
+Grep
+----
+{
+  "pattern": "string (required, regex pattern)",
+  "path": "string (optional, file or directory)",
+  "output_mode": "content|files_with_matches|count (optional)",
+  "glob": "string (optional, e.g. '*.js')",
+  "type": "string (optional, e.g. 'js', 'py')",
+  "-A": "number (optional, lines after)",
+  "-B": "number (optional, lines before)",
+  "-C": "number (optional, lines before and after)",
+  "-i": "boolean (optional, case insensitive)",
+  "-n": "boolean (optional, show line numbers)",
+  "multiline": "boolean (optional, default false)",
+  "head_limit": "number (optional)",
+  "offset": "number (optional)"
+}
+
+## COMMAND EXECUTION
+
+Bash
+----
+{
+  "command": "string (required)",
+  "description": "string (optional, 5-10 words)",
+  "timeout": "number (optional, max 600000ms)",
+  "run_in_background": "boolean (optional)",
+  "dangerouslyDisableSandbox": "boolean (optional)"
+}
+
+BashOutput
+----------
+{
+  "bash_id": "string (required)",
+  "filter": "string (optional, regex filter)"
+}
+
+KillShell
+---------
+{
+  "shell_id": "string (required)"
+}
+
+## AGENT & WORKFLOW
+
+Task (Spawns Subagents)
+-----------------------
+{
+  "subagent_type": "string (required)",
+  "prompt": "string (required)",
+  "description": "string (required, 3-5 words)",
+  "model": "sonnet|opus|haiku (optional)",
+  "resume": "string (optional, agent ID to resume)"
+}
+
+Available subagent_types:
+  - general-purpose: Multi-step tasks, code searching
+  - Explore: Codebase exploration (thoroughness: quick/medium/very thorough)
+  - Plan: Same as Explore
+  - effect-expert: Effect services, layers, DI, error handling
+  - test-writer: Tests using @effect/vitest
+  - domain-modeler: Type-safe domain models with ADTs
+  - spec-writer: Spec-driven development workflow
+  - react-expert: React patterns with Effect Atom
+
+TodoWrite
+---------
+{
+  "todos": [
+    {
+      "content": "string (required, imperative form)",
+      "status": "pending|in_progress|completed (required)",
+      "activeForm": "string (required, present continuous form)"
+    }
+  ]
+}
+
+## WEB OPERATIONS
+
+WebFetch
+--------
+{
+  "url": "string (required, fully-formed URL)",
+  "prompt": "string (required, what to extract)"
+}
+
+WebSearch
+---------
+{
+  "query": "string (required, min 2 chars)",
+  "allowed_domains": "string[] (optional)",
+  "blocked_domains": "string[] (optional)"
+}
+
+## USER INTERACTION
+
+AskUserQuestion
+---------------
+{
+  "questions": [
+    {
+      "question": "string (required)",
+      "header": "string (required, max 12 chars)",
+      "multiSelect": "boolean (required)",
+      "options": [
+        {
+          "label": "string (required, 1-5 words)",
+          "description": "string (required)"
+        }
+      ]
+    }
+  ]
+}
+
+## SKILLS & COMMANDS
+
+Skill
+-----
+{
+  "skill": "string (required, skill name only, no args)"
+}
+
+Available skills:
+  - atom-state
+  - context-witness
+  - domain-predicates
+  - layer-design
+  - service-implementation
+  - typeclass-design
+
+SlashCommand
+------------
+{
+  "command": "string (required, e.g. '/review-pr 123')"
+}
+
+## MCP (Model Context Protocol)
+
+ListMcpResourcesTool
+--------------------
+{
+  "server": "string (optional, server name to filter)"
+}
+
+ReadMcpResourceTool
+-------------------
+{
+  "server": "string (required)",
+  "uri": "string (required)"
+}
+
+mcp__effect-docs__effect_docs_search
+-------------------------------------
+{
+  "query": "string (required)"
+}
+
+mcp__effect-docs__get_effect_doc
+---------------------------------
+{
+  "documentId": "number (required)",
+  "page": "number (optional)"
+}
+
+## PLAN MODE
+
+ExitPlanMode
+------------
+{
+  "plan": "string (required, markdown format)"
+}
+
+===========================================
+IMPORTANT NOTES
+===========================================
+
+1. Task is a TOOL - it triggers PreToolUse/PostToolUse hooks
+2. Subagents spawned with Task inherit parent AGENT_ID
+3. File locks only apply to TypeScript files (.ts, .tsx)
+4. Hooks receive full context including session_id, cwd, etc.

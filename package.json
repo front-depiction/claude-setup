@@ -1,0 +1,22 @@
+{
+  "name": "claude-setup",
+  "version": "1.0.0",
+  "description": "Claude CLI setup with file lock enforcement hooks",
+  "type": "module",
+  "scripts": {
+    "test:lock": "echo '{\"tool\":\"Write\",\"file_path\":\"/tmp/test.ts\"}' | AGENT_ID=test-agent tsx .claude/hooks/file-lock-enforcer.ts"
+  },
+  "dependencies": {
+    "@effect/cli": "^0.72.1",
+    "@effect/platform": "^0.63.0",
+    "@effect/platform-bun": "^0.42.0",
+    "@effect/platform-node": "^0.58.0",
+    "@effect/schema": "^0.72.0",
+    "effect": "^3.7.0"
+  },
+  "devDependencies": {
+    "bun-types": "^1.1.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
