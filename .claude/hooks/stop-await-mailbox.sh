@@ -26,22 +26,8 @@ else
   HOOKS_DIR="${SCRIPT_DIR}"
 fi
 
-LOG_FILE="$CLAUDE_PROJECT_DIR/.claude/coordination/hook-debug.log"
-
 # Read all input
 INPUT=$(cat)
-
-{
-  echo ""
-  echo "=============================================================================="
-  echo "[ $(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ") ] stop-await-mailbox.sh START"
-  echo "------------------------------------------------------------------------------"
-  echo "[INPUT PAYLOAD]"
-  echo "$INPUT"
-  echo "------------------------------------------------------------------------------"
-  echo "[COLLABORATION MODE: ${COLLABORATION:-false}]"
-  echo ""
-} >> "$LOG_FILE"
 
 # Extract session_id from input
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"')
@@ -62,11 +48,6 @@ if [ "$ENABLE_FLAG" = "true" ]; then
     'del(.__enable_next__) | if has($sid) then . else . + {($sid): []} end' \
     "$MAILBOXES_FILE" > "$MAILBOXES_FILE.tmp" && \
     mv "$MAILBOXES_FILE.tmp" "$MAILBOXES_FILE"
-
-  {
-    echo "[__enable_next__ FLAG FOUND - ADDED SESSION TO MAILBOXES.JSON]"
-    echo "[SESSION_ID: $SESSION_ID]"
-  } >> "$LOG_FILE"
 fi
 
 # Check for __disable_next__ flag
@@ -76,14 +57,6 @@ if [ "$DISABLE_FLAG" = "true" ]; then
   jq --arg sid "$SESSION_ID" 'del(.__disable_next__) | del(.[$sid])' \
     "$MAILBOXES_FILE" > "$MAILBOXES_FILE.tmp" && \
     mv "$MAILBOXES_FILE.tmp" "$MAILBOXES_FILE"
-
-  {
-    echo "[__disable_next__ FLAG FOUND - REMOVED SESSION FROM MAILBOXES.JSON]"
-    echo "[SESSION_ID: $SESSION_ID]"
-    echo "[ $(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ") ] stop-await-mailbox.sh END"
-    echo "=============================================================================="
-    echo ""
-  } >> "$LOG_FILE"
   exit 0
 fi
 
@@ -91,23 +64,8 @@ fi
 SESSION_EXISTS=$(jq --arg sid "$SESSION_ID" 'has($sid)' "$MAILBOXES_FILE")
 
 if [ "$SESSION_EXISTS" != "true" ]; then
-  {
-    echo "[COLLABORATION DISABLED - SESSION NOT IN MAILBOXES.JSON]"
-    echo "[SESSION_ID: $SESSION_ID]"
-    echo "[ $(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ") ] stop-await-mailbox.sh END"
-    echo "=============================================================================="
-    echo ""
-  } >> "$LOG_FILE"
   exit 0
 fi
-
-{
-  echo "[COLLABORATION ENABLED - SESSION IN MAILBOXES.JSON]"
-  echo "[SESSION_ID: $SESSION_ID]"
-  echo "[MAILBOXES_FILE: $MAILBOXES_FILE]"
-  echo "[HOOKS_DIR: $HOOKS_DIR]"
-  echo "[PWD: $(pwd)]"
-} >> "$LOG_FILE"
 
 # Stay in project root - Path module from Effect Platform uses cwd automatically
 # DO NOT cd to HOOKS_DIR as it breaks relative path resolution
@@ -115,26 +73,10 @@ fi
 # Export session_id as environment variable for TypeScript to read
 export SESSION_ID="$SESSION_ID"
 
-{
-  echo ""
-  echo "[RUNNING TYPESCRIPT...]"
-  echo "[COMMAND: bun run ${HOOKS_DIR}/stop-await-mailbox.ts]"
-  echo "[SESSION_ID ENV: $SESSION_ID]"
-  echo ""
-} >> "$LOG_FILE"
-
 # Run the TypeScript implementation with Bun directly (NOT in subshell)
 # This allows the hook to properly block and wait for messages
 # TypeScript will read SESSION_ID from environment using Config module
 bun run "${HOOKS_DIR}/stop-await-mailbox.ts" 2>&1
 EXIT_CODE=$?
 
-{
-  echo ""
-  echo "[EXIT CODE: $EXIT_CODE]"
-  echo "[ $(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ") ] stop-await-mailbox.sh END"
-  echo "=============================================================================="
-  echo ""
-} >> "$LOG_FILE"
-
-exit 0
+exit $EXIT_CODE

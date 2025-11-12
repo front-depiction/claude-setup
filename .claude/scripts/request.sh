@@ -22,12 +22,15 @@ TARGET_AGENT_NAME="$2"
 shift 2
 MESSAGE="$*"
 
-MAILBOX_FILE=".claude/coordination/mailboxes.json"
+MAILBOX_DIR=".claude/coordination/mailboxes"
+MAILBOX_FILE="$MAILBOX_DIR/$TARGET_AGENT_NAME.json"
 
-# Initialize mailboxes.json if it doesn't exist
+# Initialize mailbox directory if it doesn't exist
+mkdir -p "$MAILBOX_DIR"
+
+# Initialize agent's mailbox if it doesn't exist
 if [ ! -f "$MAILBOX_FILE" ]; then
-  mkdir -p "$(dirname "$MAILBOX_FILE")"
-  echo "{}" > "$MAILBOX_FILE"
+  echo "[]" > "$MAILBOX_FILE"
 fi
 
 # Create request object with sender agent name
@@ -38,8 +41,8 @@ REQUEST=$(jq -n \
   '{from: $from, message: $msg, timestamp: $ts}')
 
 # Append to target agent's mailbox
-jq --arg agent "$TARGET_AGENT_NAME" --argjson req "$REQUEST" \
-  '.[$agent] = (.[$agent] // []) + [$req]' \
+jq --argjson req "$REQUEST" \
+  '. + [$req]' \
   "$MAILBOX_FILE" > "$MAILBOX_FILE.tmp" && mv "$MAILBOX_FILE.tmp" "$MAILBOX_FILE"
 
 echo ""

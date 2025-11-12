@@ -1,38 +1,40 @@
 #!/usr/bin/env bash
 
-MAILBOXES_FILE=".claude/coordination/mailboxes.json"
+MAILBOX_DIR=".claude/coordination/mailboxes"
 
-if [ ! -f "$MAILBOXES_FILE" ]; then
-  echo "No mailboxes file found."
+if [ ! -d "$MAILBOX_DIR" ]; then
+  echo "No mailboxes found."
   exit 0
 fi
 
-CONTENT=$(cat "$MAILBOXES_FILE")
-
-# Check if empty or just {}
-if [ "$CONTENT" = "{}" ] || [ -z "$CONTENT" ]; then
+# Count mailbox files with non-empty content
+MAILBOX_FILES=("$MAILBOX_DIR"/*.json)
+if [ ! -e "${MAILBOX_FILES[0]}" ]; then
   echo "No pending mailbox requests."
   exit 0
 fi
 
 echo "=== Agent Mailboxes ==="
 echo ""
-cat "$MAILBOXES_FILE" | jq -r '
-  to_entries |
-  if length == 0 then
-    "No pending mailbox requests."
-  else
-    "Total agents with pending messages: \(length)\n" +
-    (map("
-Agent: \(.key)
-  Pending requests: \(.value | length)
-\(.value | map(
-    if type == "object" then
-      "    - From: \(.from)\n      Message: \"\(.message)\"\n      Time: \(.timestamp)"
-    else
-      "    - Message: \"\(. | tostring)\""
-    end
-  ) | join("\n"))
-") | join("\n"))
-  end
-'
+
+TOTAL=0
+for file in "$MAILBOX_DIR"/*.json; do
+  [ -f "$file" ] || continue
+
+  AGENT_NAME=$(basename "$file" .json)
+  COUNT=$(jq 'length' "$file")
+
+  if [ "$COUNT" -gt 0 ]; then
+    TOTAL=$((TOTAL + 1))
+    echo "Agent: $AGENT_NAME"
+    echo "  Pending requests: $COUNT"
+    jq -r '.[] | "    - From: \(.from)\n      Message: \"\(.message)\"\n      Time: \(.timestamp)"' "$file"
+    echo ""
+  fi
+done
+
+if [ "$TOTAL" -eq 0 ]; then
+  echo "No pending mailbox requests."
+else
+  echo "Total agents with pending messages: $TOTAL"
+fi

@@ -69,14 +69,7 @@ The hook reads JSON from stdin:
     "lastModified": "2025-11-10T14:23:15.123Z"
   }
 }
-```
 
-### Lock Comment Header
-
-When acquiring a lock, the hook adds a comment to the top of the file:
-```typescript
-// [LOCKED by agent-12345 @ 2025-11-10T14:23:15.123Z]
-```
 
 ## Configuration
 

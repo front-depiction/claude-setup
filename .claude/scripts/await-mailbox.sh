@@ -18,22 +18,16 @@ if [ $# -lt 1 ]; then
 fi
 
 AGENT_NAME="$1"
-MAILBOXES_FILE=".claude/coordination/mailboxes.json"
-LOG_FILE=".claude/coordination/hook-debug.log"
+MAILBOX_DIR=".claude/coordination/mailboxes"
+MAILBOX_FILE="$MAILBOX_DIR/$AGENT_NAME.json"
 
-echo "[$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")] await-mailbox.sh: Agent '$AGENT_NAME' waiting for messages" >> "$LOG_FILE"
+# Initialize mailbox directory if it doesn't exist
+mkdir -p "$MAILBOX_DIR"
 
-# Initialize mailboxes.json if it doesn't exist or is empty
-mkdir -p "$(dirname "$MAILBOXES_FILE")"
-if [ ! -f "$MAILBOXES_FILE" ] || [ ! -s "$MAILBOXES_FILE" ]; then
-  echo "{}" > "$MAILBOXES_FILE"
+# Initialize agent's mailbox if it doesn't exist
+if [ ! -f "$MAILBOX_FILE" ]; then
+  echo "[]" > "$MAILBOX_FILE"
 fi
-
-# Add this agent to mailboxes.json (if not already registered)
-jq --arg agent "$AGENT_NAME" \
-  'if has($agent) then . else . + {($agent): []} end' \
-  "$MAILBOXES_FILE" > "$MAILBOXES_FILE.tmp" && \
-  mv "$MAILBOXES_FILE.tmp" "$MAILBOXES_FILE"
 
 echo "✅ Registered as agent: $AGENT_NAME"
 echo "🔔 Waiting for messages..."

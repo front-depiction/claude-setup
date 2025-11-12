@@ -1,4 +1,3 @@
-// [LOCKED by 6b56d118-a654-4854-816e-e9d51439ac14 @ 2025-11-11T14:24:31.060Z]
 /**
  * Stop Hook - Await Mailbox Messages
  *
@@ -21,25 +20,17 @@ import {
   Option,
   Config,
   Array,
-  Record,
-  Predicate,
 } from "effect"
-import { FileSystem, Path, Terminal } from "@effect/platform"
+import { FileSystem, Path } from "@effect/platform"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { ParseResult, Schema } from "@effect/schema"
-import { waitFor } from "xstate"
+import { PlatformError } from "@effect/platform/Error"
 
 // ============================================================================
 // Tagged Errors
 // ============================================================================
 
-/**
- * Error when stdin cannot be read
- * @category Errors
- */
-export class StdinReadError extends Data.TaggedError("StdinReadError")<{
-  readonly cause: unknown
-}> { }
+
 
 /**
  * Error when hook input fails validation
@@ -77,7 +68,7 @@ const StopHookInput = Schema.Struct({
   hook_event_name: Schema.String,
   source: Schema.String, // "natural" or other
 })
-
+type StopHookInput = Schema.Schema.Type<typeof StopHookInput>
 /**
  * Schema for a single request in the mailbox
  * @category Schemas
@@ -88,18 +79,7 @@ const Request = Schema.Struct({
   timestamp: Schema.String,
 })
 
-/**
- * Schema for the complete mailboxes data structure
- * @category Schemas
- */
-const Mailboxes = Schema.Record({
-  key: Schema.String,
-  value: Schema.Array(Request),
-})
-
-type StopHookInput = Schema.Schema.Type<typeof StopHookInput>
 type Request = Schema.Schema.Type<typeof Request>
-type Mailboxes = Schema.Schema.Type<typeof Mailboxes>
 
 // ============================================================================
 // Configuration Service
@@ -112,7 +92,8 @@ type Mailboxes = Schema.Schema.Type<typeof Mailboxes>
 export class MailboxConfig extends Context.Tag("MailboxConfig")<
   MailboxConfig,
   {
-    readonly mailboxFilePath: string
+    readonly mailboxDir: string
+    readonly getMailboxPath: (agentName: string) => string
   }
 >() { }
 
@@ -125,10 +106,11 @@ export const MailboxConfigLive = Layer.effect(
   MailboxConfig,
   Effect.gen(function* () {
     const path = yield* Path.Path
-    const mailboxFilePath = path.join(".claude", "coordination", "mailboxes.json")
+    const mailboxDir = path.join(".claude", "coordination", "mailboxes")
 
     return MailboxConfig.of({
-      mailboxFilePath,
+      mailboxDir,
+      getMailboxPath: (agentName: string) => path.join(mailboxDir, `${agentName}.json`),
     })
   })
 )
@@ -149,7 +131,7 @@ export class MailboxRepository extends Context.Tag("MailboxRepository")<
     ) => Effect.Effect<ReadonlyArray<Request>, MailboxOperationError>
     readonly removeMessages: (
       agentName: string
-    ) => Effect.Effect<void, MailboxOperationError>
+    ) => Effect.Effect<void, MailboxOperationError | PlatformError>
   }
 >() { }
 
@@ -162,58 +144,35 @@ export const MailboxRepositoryLive = Layer.effect(
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const config = yield* MailboxConfig
-    const path = yield* Path.Path
-
-    const readMailboxes: Effect.Effect<Mailboxes, MailboxOperationError> = pipe(
-      fs.readFileString(config.mailboxFilePath),
-      Effect.flatMap(Schema.decode(Schema.parseJson(Mailboxes))),
-      Effect.mapError(
-        (error) =>
-          new MailboxOperationError({
-            reason: "Failed to read mailboxes file",
-            cause: error,
-          })
-      ),
-    )
 
     const readMessages = (agentName: string) =>
       pipe(
-        readMailboxes,
-        Effect.map((mailboxes) => pipe(
-          Record.get(mailboxes, agentName),
-          Option.getOrElse(() => Array.empty())
-        ))
+        config.getMailboxPath(agentName),
+        fs.readFileString,
+        Effect.flatMap(Schema.decode(Schema.parseJson(Schema.Array(Request)))),
+        Effect.mapError(
+          (error) =>
+            new MailboxOperationError({
+              reason: "Failed to read mailbox file",
+              cause: error,
+            })
+        ),
       )
 
     const removeMessages = (agentName: string) =>
       Effect.gen(function* () {
-        const mailboxes = yield* readMailboxes
-        const messages = pipe(
-          Record.get(mailboxes, agentName),
-        )
+        const mailboxPath = config.getMailboxPath(agentName)
 
-        if (Option.isNone(messages)) {
-          return
-        }
+        // Check if file exists
+        const exists = yield* fs.exists(mailboxPath)
+        if (!exists) return
 
-        // Remove messages from mailbox
-        const updatedMailboxes = pipe(
-          mailboxes,
-          Record.remove(agentName)
-        )
-
-        // Write updated mailboxes
-        const mailboxDir = path.dirname(config.mailboxFilePath)
-        yield* fs.makeDirectory(mailboxDir, { recursive: true }).pipe(
-          Effect.catchAll(() => Effect.void)
-        )
-
-        const content = JSON.stringify(updatedMailboxes, null, 2)
-        yield* fs.writeFileString(config.mailboxFilePath, content).pipe(
+        // Clear the mailbox by writing empty array
+        yield* fs.writeFileString(mailboxPath, "[]").pipe(
           Effect.mapError(
             (error) =>
               new MailboxOperationError({
-                reason: "Failed to write mailboxes file",
+                reason: "Failed to clear mailbox file",
                 cause: error,
               })
           )
@@ -227,38 +186,6 @@ export const MailboxRepositoryLive = Layer.effect(
   })
 )
 
-// ============================================================================
-// Stdin Reader Service
-// ============================================================================
-
-/**
- * Service for reading stdin
- * @category Services
- */
-export class StdinReader extends Context.Tag("StdinReader")<
-  StdinReader,
-  {
-    readonly read: Effect.Effect<string, StdinReadError>
-  }
->() { }
-
-/**
- * Live implementation of StdinReader using Terminal service
- * @category Layers
- */
-export const StdinReaderLive = Layer.effect(
-  StdinReader,
-  Effect.gen(function* () {
-    const terminal = yield* Terminal.Terminal
-
-    return StdinReader.of({
-      read: pipe(
-        terminal.readLine,
-        Effect.mapError((cause) => new StdinReadError({ cause }))
-      ),
-    })
-  })
-)
 
 // ============================================================================
 // Hook Input Parser Service
@@ -338,22 +265,27 @@ export const MailboxAwaiterLive = Layer.effect(
 
     const awaitMessages = (agentName: string): Effect.Effect<ReadonlyArray<Request>, MailboxOperationError> =>
       Effect.gen(function* () {
-        // Watch for changes using Stream + takeUntil pattern
-        return yield* pipe(
-          fs.watch(config.mailboxFilePath),
-          Stream.mapError(
-            (error) =>
+        const mailboxPath = config.getMailboxPath(agentName)
+
+        const initialCheck = Stream.fromEffect(repo.readMessages(agentName))
+
+        const watchStream =
+          fs.watch(mailboxPath).pipe(
+            Stream.mapEffect(() => repo.readMessages(agentName)),
+            Stream.mapError((error) =>
               new MailboxOperationError({
-                reason: "Failed to watch mailbox file",
-                cause: error,
+                reason: "Failed to watch mailbox file", cause: error
               })
-          ),
-          Stream.mapEffect(() => repo.readMessages(agentName)),
-          Stream.filter(_ => Array.isNonEmptyReadonlyArray(_)),
+            ),
+          )
+
+        return yield* pipe(
+          Stream.concat(initialCheck, watchStream),
+          Stream.filter(Array.isNonEmptyReadonlyArray),
           Stream.runHead,
           Effect.flatMap(
             Option.match({
-              onNone: () => Effect.never,  // No messages found - block forever
+              onNone: () => Effect.never,
               onSome: (messages) => Effect.succeed(messages)
             })
           )
@@ -379,24 +311,14 @@ const program = Effect.gen(function* () {
   // Read agent name from environment (set by bash script)
   const agentName = yield* Config.string("AGENT_NAME")
 
-  // Check for existing messages first
-  const existing = yield* repo.readMessages(agentName)
-
-  if (existing.length > 0) {
-    const output = formatMessages(existing)
-    yield* Console.log(output)
-    return
-  }
-
+  // Await messages (checks existing first, then watches for new ones)
   const messages = yield* awaiter.awaitMessages(agentName)
   const output = formatMessages(messages)
   yield* Console.log(output)
 
   // Remove messages after displaying
   yield* repo.removeMessages(agentName)
-}).pipe(
-  Effect.tapError(Console.error)
-)
+})
 
 // ============================================================================
 // Application Layer
@@ -426,20 +348,13 @@ const AppLive =
 // Entry Point
 // ============================================================================
 
-/**
- * Main runnable effect with error handling and interruption support
- */
 const runnable = pipe(
   program,
   Effect.provide(AppLive),
-
-  // Handle interruption gracefully (Ctrl+C)
   Effect.onInterrupt(() =>
     Console.log("\n\n⚠️  Mailbox watch cancelled by user\n")
   ),
-
-  // Handle errors silently (hook convention - non-critical feature)
-  Effect.catchAll(() => Effect.void)
+  Effect.catchAll(Effect.logError)
 )
 
 BunRuntime.runMain(runnable)

@@ -1,6 +1,0 @@
-Initial content for concurrency test
-Line 1
-Line 2
-Line 3
-AGENT ALPHA WAS HERE - 2025-11-10T00:00:00Z
-AGENT BETA WAS HERE - 2025-11-10T00:00:00Z

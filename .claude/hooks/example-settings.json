@@ -1,9 +1,0 @@
-{
-  "description": "Example settings.json configuration for enabling the file lock enforcer hook",
-  "hooks": {
-    "preToolUse": ".claude/hooks/file-lock-enforcer.sh"
-  },
-  "environment": {
-    "AGENT_ID": "agent-12345"
-  }
-}

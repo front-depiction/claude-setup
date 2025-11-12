@@ -1,4 +1,3 @@
-// [LOCKED by 1ec7ad43-a10c-41f8-95b4-4f00fdc98b88 @ 2025-11-10T16:00:47.866Z]
 ---
 name: effect-expert
 description: Implements Effect services, layers, dependency injection, and error handling following Effect best practices
