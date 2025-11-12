@@ -9,31 +9,12 @@
  * @since 1.0.0
  */
 
-import { Effect, Console, Data, pipe, Array as EffectArray, String as EffectString } from "effect"
+import { Effect, Console, pipe, Array, Record, Option, String } from "effect"
 import { Terminal, FileSystem, Path } from "@effect/platform"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Schema } from "@effect/schema"
 import { UserPromptInput } from "./schemas"
 
-/**
- * Tagged Errors
- */
-export class StdinReadError extends Data.TaggedError("StdinReadError")<{
-  readonly cause: unknown
-}> { }
-
-export class JsonParseError extends Data.TaggedError("JsonParseError")<{
-  readonly input: string
-  readonly cause: unknown
-}> { }
-
-export class SchemaDecodeError extends Data.TaggedError("SchemaDecodeError")<{
-  readonly cause: unknown
-}> { }
-
-export class FileSystemError extends Data.TaggedError("FileSystemError")<{
-  readonly cause: unknown
-}> { }
 
 /**
  * Skill metadata extracted from skill files
@@ -46,22 +27,31 @@ interface SkillMetadata {
 /**
  * Parse frontmatter from markdown file
  */
-const parseFrontmatter = (content: string): Record<string, string> => {
+const parseFrontmatter = (content: string): Record.ReadonlyRecord<string, string> => {
   const frontmatterRegex = /^---\n([\s\S]*?)\n---/
   const match = content.match(frontmatterRegex)
 
-  if (!match) return {}
+  if (!match) return Record.empty()
 
   const frontmatter = match[1]
-  const lines = frontmatter.split("\n")
+  const lines = String.split(frontmatter, "\n")
 
-  return lines.reduce((acc, line) => {
-    const [key, ...valueParts] = line.split(":")
-    if (key && valueParts.length > 0) {
-      acc[key.trim()] = valueParts.join(":").trim()
-    }
-    return acc
-  }, {} as Record<string, string>)
+  const entries = Array.filterMap(lines, (line) =>
+    pipe(
+      line,
+      String.indexOf(":"),
+      Option.flatMap(colonIndex => {
+        const key = pipe(line, String.slice(0, colonIndex), String.trim)
+        const value = pipe(line, String.slice(colonIndex + 1), String.trim)
+
+        return String.isNonEmpty(key) && String.isNonEmpty(value)
+          ? Option.some([key, value] as const)
+          : Option.none()
+      })
+    )
+  )
+
+  return Record.fromEntries(entries)
 }
 
 /**
@@ -75,10 +65,12 @@ const extractKeywords = (text: string): ReadonlyArray<string> => {
     "are", "can", "will", "use", "used", "make", "makes", "create"
   ])
 
-  return text
-    .toLowerCase()
-    .split(/[\s,.-]+/)
-    .filter(word => word.length >= 3 && !commonWords.has(word))
+  const lowercased = String.toLowerCase(text)
+  const words = String.split(lowercased, /[\s,.-]+/)
+
+  return Array.filter(words, word =>
+    String.length(word) >= 3 && !commonWords.has(word)
+  )
 }
 
 /**
@@ -100,10 +92,7 @@ const readSkillFile = (skillPath: string) =>
     const fs = yield* FileSystem.FileSystem
     const path = yield* Path.Path
 
-    const content = yield* fs.readFileString(skillPath).pipe(
-      Effect.mapError(cause => new FileSystemError({ cause }))
-    )
-
+    const content = yield* fs.readFileString(skillPath)
     const frontmatter = parseFrontmatter(content)
     const name = frontmatter.name || path.basename(path.dirname(skillPath))
     const description = frontmatter.description || ""
@@ -111,9 +100,11 @@ const readSkillFile = (skillPath: string) =>
     // Extract keywords from both name and description
     const nameKeywords = extractKeywords(name)
     const descKeywords = extractKeywords(description)
-    const keywords = [...new Set([...nameKeywords, ...descKeywords])]
+    const keywords = Array.dedupe(
+      Array.appendAll(nameKeywords, descKeywords)
+    )
 
-    return { name, keywords } as SkillMetadata
+    return { name, keywords }
   })
 
 /**
@@ -123,35 +114,24 @@ const loadSkills = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
 
-  // Use relative path - BunContext provides FileSystem relative to cwd
-  // The shell script runs from project root
   const skillsDir = path.join(".claude", "skills")
 
-  // Check if skills directory exists
-  const exists = yield* fs.exists(skillsDir).pipe(
-    Effect.mapError(cause => new FileSystemError({ cause }))
-  )
+  const exists = yield* fs.exists(skillsDir)
 
-  if (!exists) {
-    return [] as ReadonlyArray<SkillMetadata>
-  }
+  if (!exists) { return Array.empty<SkillMetadata>() }
 
   // Read all subdirectories
-  const entries = yield* fs.readDirectory(skillsDir).pipe(
-    Effect.mapError(cause => new FileSystemError({ cause }))
+  const entries = yield* fs.readDirectory(skillsDir)
+
+  // Read SKILL.md from each subdirectory using filterMap pattern
+  const skillEffects = Array.map(entries, entry =>
+    Effect.option(readSkillFile(path.join(skillsDir, entry, "SKILL.md")))
   )
 
-  // Read SKILL.md from each subdirectory
-  const skills = yield* Effect.all(
-    entries.map(entry =>
-      readSkillFile(path.join(skillsDir, entry, "SKILL.md")).pipe(
-        Effect.catchAll(() => Effect.succeed(null))
-      )
-    ),
-    { concurrency: "unbounded" }
-  )
 
-  return skills.filter((s): s is SkillMetadata => s !== null)
+  const skillOptions = yield* Effect.all(skillEffects, { concurrency: "unbounded" })
+
+  return Array.getSomes(skillOptions)
 })
 
 /**
@@ -161,7 +141,10 @@ const loadSkills = Effect.gen(function* () {
  * @since 1.0.0
  */
 const matchesKeyword = (prompt: string, keyword: string): boolean =>
-  prompt.toLowerCase().includes(keyword.toLowerCase())
+  pipe(
+    String.toLowerCase(prompt),
+    String.includes(String.toLowerCase(keyword))
+  )
 
 /**
  * Find all matching skills for a prompt
@@ -173,11 +156,11 @@ const findMatchingSkills = (
   prompt: string,
   skills: ReadonlyArray<SkillMetadata>
 ): ReadonlyArray<string> =>
-  skills
-    .filter(skill =>
-      skill.keywords.some(keyword => matchesKeyword(prompt, keyword))
-    )
-    .map(skill => skill.name)
+  Array.filterMap(skills, skill =>
+    Array.some(skill.keywords, keyword => matchesKeyword(prompt, keyword))
+      ? Option.some(skill.name)
+      : Option.none()
+  )
 
 /**
  * Format skill suggestions as context reminder
@@ -189,72 +172,19 @@ const formatSkillSuggestion = (
   skills: ReadonlyArray<string>
 ) =>
   pipe(
-    Effect.succeed({
+    {
       hookSpecificOutput: {
         hookEventName: "UserPromptSubmit" as const,
         additionalContext: `💡 Relevant skills: ${skills.join(", ")}`,
       },
-    }),
-    Effect.flatMap((suggestion) =>
-      Schema.encode(SkillSuggestion)(suggestion)
-    ),
-    Effect.map((encoded) => JSON.stringify(encoded))
+    },
+    Schema.encode(Schema.parseJson(SkillSuggestion))
   )
-
-/**
- * Read stdin as a string using Terminal service
- *
- * @category I/O
- * @since 1.0.0
- */
-const readStdin = Effect.gen(function* () {
-  const terminal = yield* Terminal.Terminal
-  return yield* pipe(
-    terminal.readLine,
-    Effect.mapError((cause) => new StdinReadError({ cause }))
-  )
-})
-
-/**
- * Parse JSON input from stdin
- *
- * @category I/O
- * @since 1.0.0
- */
-const parseJson = (input: string): Effect.Effect<unknown, JsonParseError> =>
-  Effect.try({
-    try: () => JSON.parse(input),
-    catch: (cause) => new JsonParseError({ input, cause }),
-  })
-
-/**
- * Decode and validate input using schema
- *
- * @category I/O
- * @since 1.0.0
- */
-const decodeUserPrompt = (
-  raw: unknown
-): Effect.Effect<UserPromptInput, SchemaDecodeError> =>
-  pipe(
-    Schema.decodeUnknown(UserPromptInput)(raw),
-    Effect.mapError((cause) => new SchemaDecodeError({ cause }))
-  )
-
-/**
- * Output suggestion to stdout
- *
- * @category I/O
- * @since 1.0.0
- */
-const outputSuggestion = (formatted: string): Effect.Effect<void> =>
-  Console.log(formatted)
-
 /**
  * Main program - orchestrates skill suggestion pipeline
  *
  * @category Main
- * @since 1.0.0
+ * @since .0.0
  *
  * @example
  * ```typescript
@@ -273,19 +203,19 @@ const outputSuggestion = (formatted: string): Effect.Effect<void> =>
 const program = Effect.gen(function* () {
   // Load all available skills
   const skills = yield* loadSkills
+  const terminal = yield* Terminal.Terminal
 
   // Read and parse stdin
-  const stdin = yield* readStdin
-  const rawInput = yield* parseJson(stdin)
-  const input = yield* decodeUserPrompt(rawInput)
+  const stdin = yield* terminal.readLine
+  const input = yield* Schema.decode(Schema.parseJson(UserPromptInput))(stdin)
 
   // Find matching skills
   const matchingSkills = findMatchingSkills(input.prompt, skills)
 
   // Output suggestion if skills found (otherwise exit silently)
-  if (matchingSkills.length > 0) {
+  if (Array.isNonEmptyReadonlyArray(matchingSkills)) {
     const formatted = yield* formatSkillSuggestion(matchingSkills)
-    yield* outputSuggestion(formatted)
+    yield* Console.log(formatted)
   }
 })
 
@@ -298,7 +228,7 @@ const runnable = pipe(
   program,
   Effect.provide(BunContext.layer),
   Effect.catchAll((error) =>
-    Console.error(`Skill suggester encountered an error: ${error._tag}`)
+    Console.error(`Skill suggester encountered an error: ${error.message}`)
   )
 )
 
