@@ -122,16 +122,6 @@ Skills extend agents with focused capabilities:
 - **context-witness**: Witness vs Capability decisions
 - **atom-state**: Effect Atom reactive state
 
-## 📊 Context Efficiency
-
-| Task | Before | After | Savings |
-|------|--------|-------|---------|
-| Base | 104KB | 2KB | 98% |
-| Domain modeling | 104KB | 6-8KB | 92% |
-| Service/Layer | 104KB | 7-9KB | 91% |
-| React | 104KB | 7-9KB | 91% |
-| Testing | 104KB | 4-5KB | 95% |
-
 ## 🎨 MCP Integration
 
 Both `domain-modeler` and `effect-expert` agents have access to the Effect documentation via MCP:
@@ -231,7 +221,6 @@ This is enforced in agent workflows.
 
 ## 🔮 Benefits
 
-- **98% context reduction** for most tasks
 - **Specialized expertise** per domain
 - **MCP documentation access** for accuracy
 - **Consistent patterns** across projects
