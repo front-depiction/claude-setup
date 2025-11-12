@@ -327,15 +327,6 @@ const program = Effect.gen(function* () {
 /**
  * Complete application layer with all dependencies
  * @category Layers
- *
- * Layer dependency graph:
- *   BunContext.layer -> FileSystem + Path
- *   MailboxConfigLive (needs Path) -> MailboxConfig
- *   MailboxRepositoryLive (needs FileSystem + MailboxConfig) -> MailboxRepository
- *   MailboxAwaiterLive (needs FileSystem + MailboxConfig + MailboxRepository) -> MailboxAwaiter
- *
- * Note: MailboxAwaiterLive depends on MailboxRepository, so we must provide it first
- * Session ID is read from SESSION_ID environment variable (set by bash wrapper)
  */
 const AppLive =
   MailboxAwaiterLive.pipe(
