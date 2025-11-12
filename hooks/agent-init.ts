@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 /**
  * SessionStart Hook - Agent Initialization
  *
@@ -12,7 +11,7 @@
 
 import { Effect, Console, Context, Layer, Data, Schema, pipe, Config } from "effect"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
-import { Command, CommandExecutor, FileSystem } from "@effect/platform"
+import { Command, CommandExecutor } from "@effect/platform"
 
 // ============================================================================
 // Schemas
@@ -26,23 +25,10 @@ import { Command, CommandExecutor, FileSystem } from "@effect/platform"
  */
 const AgentConfigSchema = Schema.Struct({
   projectDir: Schema.String.pipe(Schema.nonEmptyString()),
-  envFile: Schema.optional(Schema.String.pipe(Schema.nonEmptyString()))
 })
 
 type AgentConfigData = Schema.Schema.Type<typeof AgentConfigSchema>
 
-/**
- * Agent ID format: agent-<timestamp>-<4-digit-random>
- *
- * @category Schema
- * @since 1.0.0
- */
-const AgentIdSchema = Schema.String.pipe(
-  Schema.pattern(/^agent-\d+-\d{4}$/),
-  Schema.brand("AgentId")
-)
-
-type AgentId = Schema.Schema.Type<typeof AgentIdSchema>
 
 /**
  * Context injection output structure
@@ -109,20 +95,6 @@ export class AgentConfig extends Context.Tag("AgentConfig")<
   AgentConfig,
   {
     readonly projectDir: string
-    readonly envFile: string | undefined
-  }
->() { }
-
-/**
- * Agent ID generator service
- *
- * @category Service
- * @since 1.0.0
- */
-export class AgentIdGenerator extends Context.Tag("AgentIdGenerator")<
-  AgentIdGenerator,
-  {
-    readonly generate: () => Effect.Effect<AgentId, AgentConfigError>
   }
 >() { }
 
@@ -140,19 +112,6 @@ export class ProjectStructureCapture extends Context.Tag("ProjectStructureCaptur
 >() { }
 
 /**
- * Environment exporter service
- *
- * @category Service
- * @since 1.0.0
- */
-export class EnvExporter extends Context.Tag("EnvExporter")<
-  EnvExporter,
-  {
-    readonly exportAgentId: (agentId: AgentId) => Effect.Effect<void, FileOperationError>
-  }
->() { }
-
-/**
  * Context output service
  *
  * @category Service
@@ -161,7 +120,7 @@ export class EnvExporter extends Context.Tag("EnvExporter")<
 export class ContextOutputter extends Context.Tag("ContextOutputter")<
   ContextOutputter,
   {
-    readonly output: (agentId: AgentId, treeOutput: string) => Effect.Effect<void, AgentConfigError>
+    readonly output: (treeOutput: string) => Effect.Effect<void, AgentConfigError>
   }
 >() { }
 
@@ -180,10 +139,6 @@ const ProjectDirConfig = pipe(
   Config.withDefault(".")
 )
 
-const EnvFileConfig = Config.string("CLAUDE_ENV_FILE").pipe(
-  Config.option
-)
-
 /**
  * Load and validate configuration from environment
  *
@@ -194,13 +149,10 @@ export const AgentConfigLive = Layer.effect(
   AgentConfig,
   Effect.gen(function* () {
     const projectDir = yield* ProjectDirConfig
-    const envFileOption = yield* EnvFileConfig
-    const envFile = envFileOption._tag === "Some" ? envFileOption.value : undefined
 
     // Validate configuration
     const config: AgentConfigData = yield* Schema.decode(AgentConfigSchema)({
       projectDir,
-      envFile
     }).pipe(
       Effect.mapError((error) =>
         new AgentConfigError({
@@ -212,38 +164,9 @@ export const AgentConfigLive = Layer.effect(
 
     return AgentConfig.of({
       projectDir: config.projectDir,
-      envFile: config.envFile
     })
   })
 )
-
-/**
- * Agent ID generator implementation
- *
- * @category Layer
- * @since 1.0.0
- */
-export const AgentIdGeneratorLive = Layer.succeed(
-  AgentIdGenerator,
-  AgentIdGenerator.of({
-    generate: () =>
-      Effect.gen(function* () {
-        const timestamp = Date.now()
-        const random = Math.floor(1000 + Math.random() * 9000)
-        const id = `agent-${timestamp}-${random}`
-
-        return yield* Schema.decode(AgentIdSchema)(id).pipe(
-          Effect.mapError((error) =>
-            new AgentConfigError({
-              reason: "Failed to generate valid agent ID",
-              cause: error
-            })
-          )
-        )
-      })
-  })
-)
-
 /**
  * Project structure capture implementation
  *
@@ -265,60 +188,11 @@ export const ProjectStructureCaptureLive = Layer.effect(
           Effect.catchAll((error) =>
             // Fallback if tree command is not available
             Effect.succeed(
-              "(tree command not available - install with: brew install tree)"
+              "(tree command may not available)" + error.message
             )
           ),
           Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
         )
-    })
-  })
-)
-
-/**
- * Environment exporter implementation
- *
- * @category Layer
- * @since 1.0.0
- */
-export const EnvExporterLive = Layer.effect(
-  EnvExporter,
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem
-    const config = yield* AgentConfig
-
-    return EnvExporter.of({
-      exportAgentId: (agentId) =>
-        Effect.gen(function* () {
-          if (!config.envFile) {
-            yield* Console.log(
-              "Warning: CLAUDE_ENV_FILE not set, skipping environment export"
-            )
-            return
-          }
-
-          const envContent = `export AGENT_ID=${agentId}\n`
-
-          // Read existing content, append new content, and write back
-          const existingContent = yield* fs
-            .readFileString(config.envFile)
-            .pipe(Effect.catchAll(() => Effect.succeed("")))
-
-          yield* fs
-            .writeFileString(config.envFile, existingContent + envContent)
-            .pipe(
-              Effect.mapError((error) =>
-                new FileOperationError({
-                  operation: "write",
-                  path: config.envFile!,
-                  cause: error
-                })
-              )
-            )
-
-          yield* Console.log(
-            `✓ Exported AGENT_ID=${agentId} to ${config.envFile}`
-          )
-        })
     })
   })
 )
@@ -335,10 +209,9 @@ export const ContextOutputterLive = Layer.effect(
     const config = yield* AgentConfig
 
     return ContextOutputter.of({
-      output: (agentId, treeOutput) =>
+      output: (treeOutput) =>
         Effect.gen(function* () {
           const contextMessage = [
-            `You are ${agentId}`,
             `Operating in: ${config.projectDir}`,
             `File structure:`,
             treeOutput
