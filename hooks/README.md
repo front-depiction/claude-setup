@@ -133,10 +133,10 @@ npx tsx .claude/hooks/file-lock-enforcer.ts
 
 ### Lock file permissions
 
-Ensure `~/.claude/coordination/` directory is writable:
+Ensure `.claude/coordination/` directory is writable:
 ```bash
-mkdir -p ~/.claude/coordination
-chmod 755 ~/.claude/coordination
+mkdir -p .claude/coordination
+chmod 755 .claude/coordination
 ```
 
 ### Agent ID conflicts

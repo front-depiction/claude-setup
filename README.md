@@ -1,40 +1,74 @@
 # Claude Code Configuration
 
-This repository contains a reusable `.claude` configuration for Effect TypeScript projects following functional programming principles.
+This repository **IS** the `.claude` configuration directory for Effect TypeScript projects following functional programming principles.
 
 ## 🚀 Usage
 
-Copy the `.claude` directory to any of your Effect TypeScript projects:
+Clone this repository directly as the `.claude` directory in your Effect TypeScript projects:
 
 ```bash
-cp -r .claude /path/to/your/project/
+# Clone directly into your project as .claude
+cd /path/to/your/project
+git clone <repo-url> .claude
+
+# Or use as a git submodule
+git submodule add <repo-url> .claude
+
+# Or copy if you prefer not to use git
+cp -r /path/to/claude-setup /path/to/your/project/.claude
 ```
 
-## 📁 Structure
+**After cloning**, your project structure will be:
+```
+your-project/
+├── .claude/           # This repository
+│   ├── agents/
+│   ├── hooks/
+│   ├── skills/
+│   └── settings.json
+├── src/               # Your code
+└── package.json
+```
+
+## 📁 Repository Structure
+
+This repository contains:
 
 ```
-.claude/
-├── instructions.md              # Minimal core instructions (~2KB)
-├── agents/                      # Specialized subagents
+claude-setup/              (clones into your-project/.claude/)
+├── agents/               # Specialized subagents
 │   ├── domain-modeler.md       # ADT domain modeling with MCP
 │   ├── effect-expert.md        # Services & layers with MCP
 │   ├── spec-writer.md          # Spec-driven development
 │   ├── react-expert.md         # Compositional React patterns
 │   └── test-writer.md          # Effect testing patterns
-├── skills/                      # Reusable capabilities
+├── skills/               # Reusable capabilities
 │   ├── typeclass-design/       # Typeclass implementation patterns
 │   ├── domain-predicates/      # Predicate and Order generation
 │   ├── service-implementation/ # Service design patterns
 │   ├── layer-design/           # Layer composition patterns
 │   ├── context-witness/        # Witness vs Capability patterns
 │   └── atom-state/             # Effect Atom patterns
-├── hooks/
-│   └── hooks.json              # Format/typecheck automation
-└── settings.json               # Configuration
-
-docs/                            # Reference documentation (not loaded by default)
-├── project-guide.md            # Original CLAUDE.md
-└── clean-code-guide.md         # Complete patterns guide
+├── commands/             # Custom slash commands
+│   ├── mailboxes.md            # Agent mailbox management
+│   ├── request.md              # Inter-agent messaging
+│   ├── await-mailbox.md        # Message waiting
+│   └── parallelize.md          # Parallel agent execution
+├── coordination/         # Multi-agent coordination
+│   └── mailboxes/              # Agent communication
+├── hooks/                # Hook implementations
+│   ├── agent-init.sh/ts        # Session startup context injection
+│   ├── skill-suggester.sh/ts   # Dynamic skill suggestions
+│   └── stop-await-mailbox.sh/ts # Mailbox coordination
+├── scripts/              # Utility scripts
+│   ├── request.sh              # Send inter-agent messages
+│   ├── await-mailbox.sh        # Wait for messages
+│   ├── mailboxes.sh            # List all mailboxes
+│   └── close-mailbox.sh        # Close mailboxes
+├── docs/                 # Reference documentation
+│   ├── project-guide.md        # Project instructions
+│   └── clean-code-guide.md     # Complete patterns guide
+└── settings.json         # Claude Code configuration
 ```
 
 ## 🎯 Specialized Agents
@@ -119,7 +153,7 @@ Agents access these automatically when needed.
 
 ## 🔄 Hooks
 
-Automatic quality checks configured in `.claude/settings.json`:
+Automatic quality checks configured in `settings.json`:
 
 ```json
 {

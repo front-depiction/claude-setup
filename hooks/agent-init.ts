@@ -415,12 +415,21 @@ const program = Effect.gen(function* () {
     Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
   )
 
-  // Get recent commits
+  // Get recent commits (short form)
   const gitLog = yield* pipe(
     Command.make("git", "log", "--oneline", "-5"),
     Command.workingDirectory(config.projectDir),
     Command.string,
     Effect.catchAll(() => Effect.succeed("(no git history)")),
+    Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+  )
+
+  // Get recent commits with files changed
+  const gitLogWithFiles = yield* pipe(
+    Command.make("git", "log", "--name-status", "--pretty=format:%h %s", "-3"),
+    Command.workingDirectory(config.projectDir),
+    Command.string,
+    Effect.catchAll(() => Effect.succeed("")),
     Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
   )
 
@@ -431,11 +440,17 @@ const program = Effect.gen(function* () {
     `File structure:`,
     treeOutput,
     ``,
+    ``,
     `Git status:`,
     gitStatus || "(clean)",
     ``,
     `Recent commits:`,
-    gitLog || "(none)"
+    gitLog || "(none)",
+    ...(gitLogWithFiles ? [
+      ``,
+      `Recent changes (files):`,
+      gitLogWithFiles
+    ] : [])
   ].join("\n")
 
   // Output context
