@@ -26,6 +26,8 @@ Schema-Expert: "Here are the schemas with indexing strategies"
 Test-Writer: "I'll generate tests based on these schemas"
 ```
 
+IMPORTANT NOTE: Always check if .claude/agents includes possible agents that relate to the task, each agent you spawn should leverage predefined agents as much as possible, over general Tasks.
+
 ## EXECUTION PROTOCOL
 
 ### Phase 0: Context Discovery
