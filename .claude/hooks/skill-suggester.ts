@@ -3,14 +3,14 @@
  * UserPromptSubmit Hook - Skill Suggester
  *
  * This hook runs when a user submits a prompt.
- * It analyzes the prompt for keywords and suggests relevant skills.
+ * It dynamically reads skill files and analyzes the prompt for keywords.
  *
  * @category Hooks
  * @since 1.0.0
  */
 
-import { Effect, Console, Data, pipe, Layer } from "effect"
-import { Terminal } from "@effect/platform"
+import { Effect, Console, Data, pipe, Array as EffectArray, String as EffectString } from "effect"
+import { Terminal, FileSystem, Path } from "@effect/platform"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Schema } from "@effect/schema"
 import { UserPromptInput } from "./schemas"
@@ -20,34 +20,138 @@ import { UserPromptInput } from "./schemas"
  */
 export class StdinReadError extends Data.TaggedError("StdinReadError")<{
   readonly cause: unknown
-}> {}
+}> { }
 
 export class JsonParseError extends Data.TaggedError("JsonParseError")<{
   readonly input: string
   readonly cause: unknown
-}> {}
+}> { }
 
 export class SchemaDecodeError extends Data.TaggedError("SchemaDecodeError")<{
   readonly cause: unknown
-}> {}
+}> { }
+
+export class FileSystemError extends Data.TaggedError("FileSystemError")<{
+  readonly cause: unknown
+}> { }
 
 /**
- * Skill mapping configuration
+ * Skill metadata extracted from skill files
  */
-const SKILL_KEYWORDS = {
-  "atom-state": ["atom", "state", "react"],
-  "service-implementation": ["service", "capability"],
-  "layer-design": ["layer", "dependency", "di", "injection"],
-  "domain-predicates": ["predicate", "order", "equivalence"],
-  "typeclass-design": ["typeclass"],
-  "context-witness": ["context", "witness"],
-} as const
+interface SkillMetadata {
+  readonly name: string
+  readonly keywords: ReadonlyArray<string>
+}
+
+/**
+ * Parse frontmatter from markdown file
+ */
+const parseFrontmatter = (content: string): Record<string, string> => {
+  const frontmatterRegex = /^---\n([\s\S]*?)\n---/
+  const match = content.match(frontmatterRegex)
+
+  if (!match) return {}
+
+  const frontmatter = match[1]
+  const lines = frontmatter.split("\n")
+
+  return lines.reduce((acc, line) => {
+    const [key, ...valueParts] = line.split(":")
+    if (key && valueParts.length > 0) {
+      acc[key.trim()] = valueParts.join(":").trim()
+    }
+    return acc
+  }, {} as Record<string, string>)
+}
+
+/**
+ * Extract keywords from description
+ * Extracts meaningful words (3+ chars) and common technical terms
+ */
+const extractKeywords = (text: string): ReadonlyArray<string> => {
+  // Remove common words and extract meaningful terms
+  const commonWords = new Set([
+    "the", "and", "for", "with", "using", "that", "this", "from",
+    "are", "can", "will", "use", "used", "make", "makes", "create"
+  ])
+
+  return text
+    .toLowerCase()
+    .split(/[\s,.-]+/)
+    .filter(word => word.length >= 3 && !commonWords.has(word))
+}
 
 /**
  * Output schema for skill suggestions
+ * Following Claude Code's UserPromptSubmit hook format
  */
 const SkillSuggestion = Schema.Struct({
-  context: Schema.String,
+  hookSpecificOutput: Schema.Struct({
+    hookEventName: Schema.Literal("UserPromptSubmit"),
+    additionalContext: Schema.String,
+  }),
+})
+
+/**
+ * Read a single skill file and extract metadata
+ */
+const readSkillFile = (skillPath: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    const path = yield* Path.Path
+
+    const content = yield* fs.readFileString(skillPath).pipe(
+      Effect.mapError(cause => new FileSystemError({ cause }))
+    )
+
+    const frontmatter = parseFrontmatter(content)
+    const name = frontmatter.name || path.basename(path.dirname(skillPath))
+    const description = frontmatter.description || ""
+
+    // Extract keywords from both name and description
+    const nameKeywords = extractKeywords(name)
+    const descKeywords = extractKeywords(description)
+    const keywords = [...new Set([...nameKeywords, ...descKeywords])]
+
+    return { name, keywords } as SkillMetadata
+  })
+
+/**
+ * Load all skills from the skills directory
+ */
+const loadSkills = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem
+  const path = yield* Path.Path
+
+  // Use relative path - BunContext provides FileSystem relative to cwd
+  // The shell script runs from project root
+  const skillsDir = path.join(".claude", "skills")
+
+  // Check if skills directory exists
+  const exists = yield* fs.exists(skillsDir).pipe(
+    Effect.mapError(cause => new FileSystemError({ cause }))
+  )
+
+  if (!exists) {
+    return [] as ReadonlyArray<SkillMetadata>
+  }
+
+  // Read all subdirectories
+  const entries = yield* fs.readDirectory(skillsDir).pipe(
+    Effect.mapError(cause => new FileSystemError({ cause }))
+  )
+
+  // Read SKILL.md from each subdirectory
+  const skills = yield* Effect.all(
+    entries.map(entry =>
+      readSkillFile(path.join(skillsDir, entry, "SKILL.md")).pipe(
+        Effect.catchAll(() => Effect.succeed(null))
+      )
+    ),
+    { concurrency: "unbounded" }
+  )
+
+  return skills.filter((s): s is SkillMetadata => s !== null)
 })
 
 /**
@@ -65,12 +169,15 @@ const matchesKeyword = (prompt: string, keyword: string): boolean =>
  * @category Business Logic
  * @since 1.0.0
  */
-const findMatchingSkills = (prompt: string): ReadonlyArray<string> =>
-  Object.entries(SKILL_KEYWORDS)
-    .filter(([_, keywords]) =>
-      keywords.some((keyword) => matchesKeyword(prompt, keyword))
+const findMatchingSkills = (
+  prompt: string,
+  skills: ReadonlyArray<SkillMetadata>
+): ReadonlyArray<string> =>
+  skills
+    .filter(skill =>
+      skill.keywords.some(keyword => matchesKeyword(prompt, keyword))
     )
-    .map(([skill]) => skill)
+    .map(skill => skill.name)
 
 /**
  * Format skill suggestions as context reminder
@@ -83,7 +190,10 @@ const formatSkillSuggestion = (
 ) =>
   pipe(
     Effect.succeed({
-      context: `💡 Relevant skills: ${skills.join(", ")}`,
+      hookSpecificOutput: {
+        hookEventName: "UserPromptSubmit" as const,
+        additionalContext: `💡 Relevant skills: ${skills.join(", ")}`,
+      },
     }),
     Effect.flatMap((suggestion) =>
       Schema.encode(SkillSuggestion)(suggestion)
@@ -152,17 +262,25 @@ const outputSuggestion = (formatted: string): Effect.Effect<void> =>
  * // {"prompt": "Help me create a service with dependency injection"}
  * //
  * // Output (stdout):
- * // {"context": "💡 Relevant skills: service-implementation, layer-design"}
+ * // {
+ * //   "hookSpecificOutput": {
+ * //     "hookEventName": "UserPromptSubmit",
+ * //     "additionalContext": "💡 Relevant skills: service-implementation, layer-design"
+ * //   }
+ * // }
  * ```
  */
 const program = Effect.gen(function* () {
+  // Load all available skills
+  const skills = yield* loadSkills
+
   // Read and parse stdin
   const stdin = yield* readStdin
   const rawInput = yield* parseJson(stdin)
   const input = yield* decodeUserPrompt(rawInput)
 
   // Find matching skills
-  const matchingSkills = findMatchingSkills(input.prompt)
+  const matchingSkills = findMatchingSkills(input.prompt, skills)
 
   // Output suggestion if skills found (otherwise exit silently)
   if (matchingSkills.length > 0) {
@@ -180,13 +298,7 @@ const runnable = pipe(
   program,
   Effect.provide(BunContext.layer),
   Effect.catchAll((error) =>
-    Effect.gen(function* () {
-      // Log error details for debugging but exit gracefully
-      yield* Console.error(
-        `Skill suggester encountered an error: ${error._tag}`
-      )
-      // Return void to succeed (exit code 0) and not interrupt user workflow
-    })
+    Console.error(`Skill suggester encountered an error: ${error._tag}`)
   )
 )
 

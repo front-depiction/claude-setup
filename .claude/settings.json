@@ -16,13 +16,16 @@
       "mcp__effect-docs__effect_docs_search",
       "mcp__effect-docs__get_effect_doc",
       "Bash(AGENT_ID=\"test-agent\" bun run:*)",
-      "Bash(.claude/scripts/await-mailbox-wrapper.sh)",
+      "Bash(.claude/scripts/await-mailbox.sh:*)",
+      "Bash(.claude/scripts/request.sh:*)",
       "Bash(EXIT=$?)",
       "Bash(echo:*)",
       "Bash(cat:*)",
       "Edit(.claude/**/*)",
       "Write(.claude/**/*)",
-      "Bash(bun add:*)"
+      "Bash(bun add:*)",
+      "SlashCommand(request:*)",
+      "SlashCommand(await-mailbox:*)"
     ]
   },
   "hooks": {
@@ -31,8 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-init.sh",
-            "description": "Provide project context: structure, git status, and recent commits"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-init.sh"
           }
         ]
       }
@@ -42,8 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/skill-suggester.sh",
-            "description": "Suggest relevant Effect TS skills"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/skill-suggester.sh"
           }
         ]
       }
@@ -54,69 +55,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-init.sh",
-            "description": "Provide subagent with project context"
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write|Udate",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/file-lock-enforcer.sh",
-            "description": "Enforce file locks to prevent conflicts"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-init.sh"
           }
         ]
       }
     ],
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/tool-logger.sh",
-            "description": "Log all tool usage"
-          },
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/mailbox-reader.sh",
-            "description": "Check agent mailbox for requests"
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/file-lock-tracker.sh",
-            "description": "Track file modifications"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-cleanup.sh",
-            "description": "Run quality checks and release locks"
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-cleanup.sh",
-            "description": "Cleanup after subagent completes"
-          }
-        ]
-      }
-    ]
+    "PostToolUse": [],
+    "Stop": [],
+    "SubagentStop": []
   }
 }
