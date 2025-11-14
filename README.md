@@ -82,7 +82,7 @@ Creates type-safe domain models with:
 - Comprehensive predicates
 - Order instances for sorting
 - Typeclass integration
-- **MCP Access**: Uses effect-docs for best practices
+- **Effect Docs**: View the git subtree in `.context/effect/` for best practices
 
 ### effect-expert
 Implements Effect infrastructure:
@@ -90,7 +90,7 @@ Implements Effect infrastructure:
 - Layer composition
 - Dependency injection
 - Error handling
-- **MCP Access**: Uses effect-docs for patterns
+- **Effect Docs**: View the git subtree in `.context/effect/` for patterns
 
 ### spec-writer
 Manages spec-driven workflow:
@@ -122,14 +122,9 @@ Skills extend agents with focused capabilities:
 - **context-witness**: Witness vs Capability decisions
 - **atom-state**: Effect Atom reactive state
 
-## 🎨 MCP Integration
+## 🎨 Effect Documentation
 
-Both `domain-modeler` and `effect-expert` agents have access to the Effect documentation via MCP:
-
-```typescript
-mcp__effect-docs__effect_docs_search(query)
-mcp__effect-docs__get_effect_doc(documentId, page)
-```
+Both `domain-modeler` and `effect-expert` agents have access to the Effect documentation via the git subtree in `.context/effect/`.
 
 This ensures implementations follow official Effect best practices.
 
@@ -199,7 +194,7 @@ This is enforced in agent workflows.
 
 → Invokes `domain-modeler` agent (6-8KB context)
 → Uses `domain-predicates` skill
-→ References Effect docs via MCP
+→ References Effect docs in `.context/effect/`
 → Generates complete module with predicates and orders
 
 ### Implementing a Service
@@ -208,7 +203,7 @@ This is enforced in agent workflows.
 
 → Invokes `effect-expert` agent (7-9KB context)
 → Uses `service-implementation` and `layer-design` skills
-→ References Effect docs via MCP
+→ References Effect docs in `.context/effect/`
 → Creates focused capability with proper layer
 
 ### Building React Component
@@ -222,7 +217,7 @@ This is enforced in agent workflows.
 ## 🔮 Benefits
 
 - **Specialized expertise** per domain
-- **MCP documentation access** for accuracy
+- **Effect documentation access** via git subtree in `.context/effect/` for accuracy
 - **Consistent patterns** across projects
 - **Reusable configuration** for all projects
 - **Automatic agent selection** based on task

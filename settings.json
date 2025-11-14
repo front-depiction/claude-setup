@@ -13,8 +13,6 @@
   "permissions": {
     "allow": [
       "Bash(bunx tsc:*)",
-      "mcp__effect-docs__effect_docs_search",
-      "mcp__effect-docs__get_effect_doc",
       "Bash(AGENT_ID=\"test-agent\" bun run:*)",
       "Bash(.claude/scripts/await-mailbox.sh:*)",
       "Bash(.claude/scripts/request.sh:*)",

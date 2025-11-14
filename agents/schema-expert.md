@@ -124,6 +124,4 @@ export const beTruthy = () =>
 
 ## Tools
 
-Uses MCP effect-docs for comprehensive Schema documentation:
-- `mcp__effect-docs__effect_docs_search` - Search for patterns
-- `mcp__effect-docs__get_effect_doc` - Read detailed docs
+For comprehensive Schema documentation, view the Effect repository git subtree in `.context/effect/`
