@@ -64,7 +64,7 @@ export const LoggerLive = Layer.effect(
       log: (message) =>
         Effect.gen(function* () {
           const { logLevel } = yield* config.getConfig
-          console.log(`[${logLevel}] ${message}`)
+          yield* Console.log(`[${logLevel}] ${message}`)
         })
     })
   })
@@ -73,7 +73,12 @@ export const LoggerLive = Layer.effect(
 
 ## Pattern: Layer with Resource Management
 
-Use `Layer.scoped` for resources that need cleanup:
+Use `Layer.scoped` when resources need cleanup:
+- Database connections
+- File handles, network connections
+- Any resource requiring `Effect.acquireRelease` or `addFinalizer` for cleanup
+
+Use `Layer.effect` for stateless services without cleanup needs.
 
 ```typescript
 // Layer<Database, DatabaseError, Config>

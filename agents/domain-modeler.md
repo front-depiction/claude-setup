@@ -146,7 +146,7 @@ import * as DateTime from "effect/DateTime"
  *   createdAt: DateTime.unsafeNow()
  * })
  *
- * console.log(Equal.equals(task, another)) // structural equality
+ * Effect.log(Equal.equals(task, another)) // structural equality
  */
 export const makePending = Schema.decodeSync(Pending)
 
@@ -247,7 +247,7 @@ import * as Equivalence from "effect/Equivalence"
  * Primary approach: Use Equal.equals() from Schema.Data
  *
  * @example
- * import { Equal } from "effect"
+ * import * as Equal from "effect/Equal"
  *
  * const task1 = Task.makePending({ ... })
  * const task2 = Task.makePending({ ... })
@@ -259,9 +259,15 @@ import * as Equivalence from "effect/Equivalence"
  */
 
 /**
- * Secondary approach: Derive Equivalence from Schema
+ * Export additional Equivalence instances for multiple comparison strategies.
  *
- * Useful when you need an Equivalence instance for combinators.
+ * Export when you need multiple ways to compare the same type:
+ * - EquivalenceById: Compare by ID only
+ * - EquivalenceByGroup: Compare by group membership
+ * - Equivalence: Full structural equivalence
+ *
+ * If you only need structural equality, use Equal.equals() directly
+ * without exporting Equivalence.
  *
  * @category Equivalence
  * @since 0.1.0
@@ -269,7 +275,7 @@ import * as Equivalence from "effect/Equivalence"
 export const Equivalence = Schema.equivalence(Task)
 
 /**
- * Tertiary approach: Field-based equivalence using Equivalence.mapInput
+ * Field-based equivalence using Equivalence.mapInput
  *
  * Compare by specific fields when structural equality isn't needed.
  *
@@ -314,9 +320,9 @@ export const Task = Schema.Union(Pending, Active, Completed).pipe(
 )
 ```
 
-**For Non-Schema Objects: Equal.Symbol**
+**For Non-Domain Objects: Manual Equal.Symbol**
 
-When working with plain objects (not using schemas):
+Only use manual Equal.Symbol implementation for internal library interfaces that don't need Schema validation/encoding (e.g., internal data structures, configuration objects). **All domain models MUST use Schema.Data.**
 
 ```typescript
 import * as Equal from "effect/Equal"
@@ -348,7 +354,7 @@ Equal.equals(user1, user2) // true
 Pattern match on the discriminated union using `Match.typeTags`:
 
 ```typescript
-import * as Taks from " module/Task"
+import * as Task from "@/schemas/Task"
 
 /**
  * Pattern match on Task using Match.typeTags.
@@ -368,7 +374,7 @@ import * as Taks from " module/Task"
 export const match = Match.typeTags<Task>()
 ```
 
-**Note:** The manual match provides better control for documentation and custom logic, while `Match.typeTags` is more concise.
+**Note:** Use `Match.typeTags` as the primary pattern. Manual pattern matching is only needed for complex custom logic or enhanced documentation purposes.
 
 ## Conditional Module Exports
 
@@ -672,7 +678,7 @@ import * as Task from "@/schemas/Task"
 import * as DateTime from "effect/DateTime"
 import * as Array from "effect/Array"
 import * as Order from "effect/Order"
-import { Equal } from "effect"
+import * as Equal from "effect/Equal"
 
 const task = Task.makePending({
   id: "123",

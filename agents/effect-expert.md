@@ -77,6 +77,11 @@ const proc = spawn("ls", ["-la"])
 
 // ❌ WRONG - console.log directly
 console.log("message")
+
+// ✅ CORRECT - Use Effect.log or Console.log
+Effect.log("message")
+// or
+Console.log("message")
 ```
 
 ### Why Effect Platform?
@@ -222,7 +227,7 @@ export const LoggerLive = Layer.effect(
       log: (message) =>
         Effect.gen(function* () {
           const { logLevel } = yield* config.getConfig
-          console.log(`[${logLevel}] ${message}`)
+          yield* Console.log(`[${logLevel}] ${message}`)
         })
     }
   })
