@@ -90,3 +90,20 @@ const result = pipe(
   })
 )
 ```
+
+## Documentation Standards
+
+### Minimal Documentation During Prototyping
+
+**CRITICAL**: Forego all @example writing unless specifically asked to. Examples pollute context unnecessarily.
+
+- **NO @example blocks** - They add significant context overhead
+- **NO excessive JSDoc** - Keep it minimal unless requested
+- **NO detailed comments** for self-explanatory code
+- Focus on clean, self-documenting implementations
+- Add documentation only when:
+  - Explicitly requested by the user
+  - Code is ready for production/publishing
+  - Public API requires clarification
+
+**Rationale**: During prototyping and development, examples and verbose documentation significantly bloat context. Write clear, readable code first. Documentation can be added later when actually needed.
