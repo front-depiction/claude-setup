@@ -23,47 +23,15 @@ Stay focused on the current task until completion. Delegate tasks to sub agents,
 
 ## Context Awareness
 
-### Efficient Code Search - Use These Instead!
-
-**CRITICAL**: Minimize context waste by using optimized search tools instead of full file reads.
-
-❌ **DON'T USE:**
-- `Grep` → `Read` full file (wastes 1000+ tokens per file)
-- Multiple `Read` calls to explore code
-
-✅ **USE INSTEAD:**
-
-**1. `/search PATTERN`** - Context-aware grep (10-20x less tokens)
-```bash
-/search scoreEntry --context=2 --max-results=5
-# Shows matches with 2 lines context, not full files
-```
-
-**2. `/symbol NAME`** - Find definition + references
-```bash
-/symbol FuzzyCache --max-refs=10
-# Shows: 📍 Definition + 🔗 All references with context
-```
-
-**3. Direct script calls** (in tools):
-```bash
-.claude/scripts/context-grep.sh "Option.none" --type=ts
-.claude/scripts/find-symbol.sh getAllOption
-```
-
-**When to use full Read:**
-- After identifying the exact file with `/search` or `/symbol`
-- When you need complete implementation details
-- Reading config files or documentation
-
 ### Library Implementation Details
 
-`.context` contains git submodules of libraries used (e.g., Effect). Use `/search` in `.context/effect/` to find patterns:
+`.context` contains git submodules of libraries used (e.g., Effect). Agents are **highly encouraged** to grep for implementation details of the files they work with:
 
-```bash
-/search "export.*Layer" --type=ts
-# Find Layer patterns in Effect source
-```
+- `Graph.ts` for graph structures
+- `Layer.ts` for dependency injection
+- Other library sources as needed
+
+This provides authoritative implementation patterns and ensures consistency with library conventions.
 
 ## Skills and Tools
 
