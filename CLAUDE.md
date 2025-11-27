@@ -143,7 +143,7 @@ const randomValue = yield* Random.next
 ### Phase 4: Test Implementation
 
 5. **Write tests using interfaces only**
-   - Use `Layer.succeed(Tag, mockImpl)` for all dependencies
+   - Use `Layer.mock(Tag, {})` for all dependencies
    - Tests must compile against interfaces
    - **No real implementation exists yet**
    - Tests define the contract implementations must fulfill
