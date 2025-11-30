@@ -180,9 +180,9 @@ export const userData = Atom.make<Result.Result<User, Error>>(
 const result = useAtomValue(userData)
 
 Result.match(result, {
-  Initial: () => <Loading />,
-  Failure: (error) => <Error message={error.message} />,
-  Success: (user) => <UserProfile user={user} />
+  onInitial: () => <Loading />,
+  onFailure: (error) => <Error message={error.message} />,
+  onSuccess: (user) => <UserProfile user={user} />
 })
 ```
 
