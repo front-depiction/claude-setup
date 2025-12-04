@@ -14,11 +14,11 @@ Design and implement Effect services as focused capabilities that compose into c
 export class PaymentService extends Context.Tag("PaymentService")<
   PaymentService,
   {
-    readonly processPayment: ...
-    readonly validateWebhook: ...
-    readonly refund: ...
-    readonly sendReceipt: ...       // Notification concern
-    readonly generateReport: ...    // Reporting concern
+    readonly processPayment: Effect.Effect<void>
+    readonly validateWebhook: Effect.Effect<void>
+    readonly refund: Effect.Effect<void>
+    readonly sendReceipt: Effect.Effect<void>       // Notification concern
+    readonly generateReport: Effect.Effect<void>    // Reporting concern
   }
 >() {}
 ```
@@ -38,8 +38,8 @@ export class PaymentGateway extends Context.Tag(
     readonly handoff: (
       intent: Doc<"paymentIntents">
     ) => Effect.Effect<HandoffResult, HandoffError, never>
-    //                                                 ▲
-    //                                    No requirements leaked
+    //                                                 // ▲
+    //                                    // No requirements leaked
   }
 >() {}
 
@@ -79,8 +79,8 @@ export class Database extends Context.Tag("Database")<
     readonly query: (
       sql: string
     ) => Effect.Effect<QueryResult, QueryError, never>
-    //                                             ▲
-    //                                  Requirements = never
+    //                                             // ▲
+    //                                  // Requirements = never
   }
 >() {}
 ```

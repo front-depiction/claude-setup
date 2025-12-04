@@ -1,5 +1,7 @@
 # Claude Agent Guidelines
 
+Leverage the LSP powered slash commands for common operations such as renaming variable, getting type definitions of a symbol, getting references, ...
+
 ## Task Management Principles
 
 ### Avoid Task Jags
@@ -10,7 +12,7 @@
 - Switching from implementing A to implementing B
 - Any mid-stream change in the core task focus
 
-Stay focused on the current task until completion. Delegate tasks to sub agents agressively (3+ agents at a time), and remain at a higher level of abstraction and coordination, resisting the temptation of jumping in yourself for quick fixes.
+Stay focused on the current task until completion. Delegate tasks to sub agents agressively (5+ agents at a time), and remain at a higher level of abstraction and coordination, resisting the temptation of jumping in yourself for quick fixes.
 
 ### Delegation Strategy
 
@@ -100,9 +102,9 @@ const randomValue = Math.random()
 
 // ✅ CORRECT - testable
 const timestamp = yield* Clock.currentTimeMillis
-const datetime = yield* DateTime.bow
+const datetime = yield* DateTime.now
 const randomValue = yield* Random.next
-```
+  ```
 
 ## Feature Implementation Workflow
 

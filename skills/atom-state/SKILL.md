@@ -169,7 +169,7 @@ Atom.runtime.addGlobalLayer(
 
 Atoms can return `Result` types for explicit error handling:
 
-```typescript
+```tsx
 import * as Result from "@effect-atom/atom/Result"
 
 export const userData = Atom.make<Result.Result<User, Error>>(
@@ -246,7 +246,7 @@ export const userSettings = Atom.kvs({
 
 ### Hooks
 
-```typescript
+```tsx
 import { useAtomValue, useAtomSet, useAtom, useAtomSetPromise } from "@effect-atom/atom-react"
 
 export function CartView() {
@@ -278,7 +278,7 @@ export function CartView() {
 
 Different components can read/write the same atom reactively:
 
-```typescript
+```tsx
 // Component A - reads state
 function CartDisplay() {
   const cart = useAtomValue(cart)

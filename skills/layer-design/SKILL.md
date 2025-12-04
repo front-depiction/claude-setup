@@ -10,11 +10,11 @@ Create layers that construct services while managing their dependencies cleanly.
 ## Layer Structure
 
 ```typescript
-Layer<RequirementsOut, Error, RequirementsIn>
-         ▲                ▲           ▲
-         │                │           └─ What this layer needs
-         │                └─ Errors during construction
-         └─ What this layer produces
+// Layer<RequirementsOut, Error, RequirementsIn>
+//          ▲                ▲           ▲
+//          │                │           └─ What this layer needs
+//          │                └─ Errors during construction
+//          └─ What this layer produces
 ```
 
 ## Pattern: Simple Layer (No Dependencies)
