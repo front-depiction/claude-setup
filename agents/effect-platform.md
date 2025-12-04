@@ -281,8 +281,11 @@ pipe(program, Effect.provide(AppLive), BunRuntime.runMain)
 
 ## 6. Complete Example
 
-```typescript
+```bash
 #!/usr/bin/env bun
+```
+
+```typescript
 import { Args, Command, Options } from "@effect/cli"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { FileSystem, Path } from "@effect/platform"

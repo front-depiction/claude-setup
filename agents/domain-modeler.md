@@ -249,8 +249,8 @@ import * as Equivalence from "effect/Equivalence"
  * @example
  * import * as Equal from "effect/Equal"
  *
- * const task1 = Task.makePending({ ... })
- * const task2 = Task.makePending({ ... })
+ * const task1 = Task.makePending({ id: "1", createdAt: DateTime.unsafeNow() })
+ * const task2 = Task.makePending({ id: "1", createdAt: DateTime.unsafeNow() })
  *
  * // Structural equality (automatic from Schema.Data)
  * if (Equal.equals(task1, task2)) {
@@ -819,7 +819,7 @@ const Admin = Schema.TaggedStruct("Admin", { name: Schema.String })
 **2. Schema.Data** - Automatic Equal implementation
 
 ```typescript
-const Admin = Schema.TaggedStruct("Admin", { ... }).pipe(Schema.Data)
+const Admin = Schema.TaggedStruct("Admin", { /* fields */ }).pipe(Schema.Data)
 // Enables: Equal.equals(admin1, admin2)
 ```
 
@@ -834,7 +834,7 @@ export const makeAdmin = Schema.decodeSync(Admin)
 **4. Schema.annotations** - Self-documenting schemas
 
 ```typescript
-Schema.TaggedStruct("Admin", { ... }).pipe(
+Schema.TaggedStruct("Admin", { /* fields */ }).pipe(
   Schema.annotations({
     identifier: "Admin",
     title: "Administrator",
@@ -865,7 +865,7 @@ Schema.suspend((): Schema.Schema<Category> => Category)
 
 ```typescript
 const match = Match.typeTags<User, string>()
-const result = match({ Admin: (u) => ..., Customer: (u) => ... })
+const result = match({ Admin: (u) => "admin", Customer: (u) => "customer" })
 ```
 
 **9. Equivalence.mapInput** - Field-based equality

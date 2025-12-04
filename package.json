@@ -1,5 +1,5 @@
 {
-  "name": "claude-hooks",
+  "name": "claude-setup",
   "version": "1.0.0",
   "type": "module",
   "private": true,
@@ -11,5 +11,9 @@
     "effect": "^3.19.3",
     "msgpackr": "^1.11.5",
     "tsx": "^4.20.6"
+  },
+  "devDependencies": {
+    "bun-types": "^1.1.0",
+    "typescript": "^5.7.0"
   }
 }

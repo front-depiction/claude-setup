@@ -33,3 +33,6 @@ build/
 .temp/
 .cache/
 tmp/
+
+# md-typecheck output
+scripts/md-typecheck-output/

@@ -478,7 +478,7 @@ Every predicate, equivalence, and order MUST have:
 
 **1. Schema.Data for Equality**
 ```typescript
-Schema.TaggedStruct("task", { ... }).pipe(Schema.Data)
+Schema.TaggedStruct("task", { id: Schema.String }).pipe(Schema.Data)
 // Usage: Equal.equals(t1, t2)
 ```
 

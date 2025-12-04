@@ -28,8 +28,8 @@ const NumberFromString = Schema.NumberFromString
 
 ### Decoding vs Encoding
 
-- **Decoding**: Transform `Encoded` ’ `Type` (e.g., string "123" ’ number 123)
-- **Encoding**: Transform `Type` ’ `Encoded` (e.g., number 123 ’ string "123")
+- **Decoding**: Transform `Encoded` ï¿½ `Type` (e.g., string "123" ï¿½ number 123)
+- **Encoding**: Transform `Type` ï¿½ `Encoded` (e.g., number 123 ï¿½ string "123")
 
 Effect Schema follows "parse, don't validate" - schemas transform data into the desired format, not just check validity.
 
@@ -42,7 +42,7 @@ Understanding when to use `compose` vs `pipe` is fundamental to schema compositi
 Use `Schema.compose` to chain schemas with **different types** at each stage. It connects the output type of one schema to the input type of another.
 
 **Type Signature:**
-```typescript
+```text
 Schema.compose: <A, B, R1>(from: Schema<B, A, R1>) =>
   <C, R2>(to: Schema<C, B, R2>) => Schema<C, A, R1 | R2>
 ```
@@ -50,16 +50,16 @@ Schema.compose: <A, B, R1>(from: Schema<B, A, R1>) =>
 **When to Use:**
 - Multi-step transformations where each stage changes the type
 - Connecting parsing and validation steps
-- Building pipelines from `Encoded ’ Intermediate ’ Type`
+- Building pipelines from `Encoded ï¿½ Intermediate ï¿½ Type`
 
 **Example - Parse and Validate:**
 ```typescript
 import { Schema } from "effect"
 
-// Split string ’ array, then transform array ’ numbers
+// Split string ï¿½ array, then transform array ï¿½ numbers
 const schema = Schema.compose(
-  Schema.split(","),              // string ’ readonly string[]
-  Schema.Array(Schema.NumberFromString) // readonly string[] ’ readonly number[]
+  Schema.split(","),              // string ï¿½ readonly string[]
+  Schema.Array(Schema.NumberFromString) // readonly string[] ï¿½ readonly number[]
 )
 
 // Result: Schema<readonly number[], string, never>
@@ -69,7 +69,7 @@ console.log(Schema.decodeUnknownSync(schema)("1,2,3")) // [1, 2, 3]
 **Example - Boolean from String via Literal:**
 ```typescript
 const BooleanFromString = Schema.compose(
-  Schema.Literal("on", "off"),  // string ’ "on" | "off"
+  Schema.Literal("on", "off"),  // string ï¿½ "on" | "off"
   Schema.transform(
     Schema.Literal("on", "off"),
     Schema.Boolean,
@@ -133,7 +133,7 @@ const ValidEmail = Schema.String.pipe(
 |--------|---------------|-------------|
 | **Purpose** | Chain transformations | Apply refinements |
 | **Type Change** | Changes type at each stage | Type stays the same |
-| **Example** | `string ’ array ’ numbers` | `number ’ positive number` |
+| **Example** | `string ï¿½ array ï¿½ numbers` | `number ï¿½ positive number` |
 | **Use Case** | Multi-step parsing | Validation constraints |
 
 ## Built-in Filters
@@ -414,14 +414,14 @@ console.log(decode(" hello ")) // "hello"
 
 ```typescript
 // Parse numbers from strings
-Schema.NumberFromString  // "123" ’ 123 (supports "NaN", "Infinity", "-Infinity")
+Schema.NumberFromString  // "123" ï¿½ 123 (supports "NaN", "Infinity", "-Infinity")
 ```
 
 ### Boolean Transformations
 
 ```typescript
 // Transform various values to boolean
-Schema.Not  // Negation: boolean ’ boolean
+Schema.Not  // Negation: boolean ï¿½ boolean
 ```
 
 ### Common Transformation Patterns
@@ -675,7 +675,7 @@ const Person = Schema.Struct({
   age: Schema.NumberFromString
 })
 
-// Encode: number 30 ’ string "30"
+// Encode: number 30 ï¿½ string "30"
 console.log(Schema.encodeSync(Person)({ name: "Alice", age: 30 }))
 // Output: { name: "Alice", age: "30" }
 ```
@@ -709,8 +709,8 @@ const schema = ReadonlySetFromArray(Schema.String)
 
 ```typescript
 const BooleanFromNumericString = Schema.transform(
-  Schema.NumberFromString,    // string ’ number
-  BooleanFromString,          // "on"|"off" ’ boolean
+  Schema.NumberFromString,    // string ï¿½ number
+  BooleanFromString,          // "on"|"off" ï¿½ boolean
   {
     strict: true,
     decode: (n) => n > 0 ? "on" : "off",
@@ -882,7 +882,7 @@ const AuthToken = Schema.TemplateLiteralParser(
   Schema.String.pipe(Schema.brand("Token"))
 )
 
-// Decodes: "Bearer abc123" ’ ["Bearer ", "abc123"]
+// Decodes: "Bearer abc123" ï¿½ ["Bearer ", "abc123"]
 ```
 
 ### Branded Types

@@ -19,7 +19,7 @@ You are a React expert focused on compositional patterns and Effect Atom integra
 
 Treat components like Effect modules:
 
-```typescript
+```tsx
 // components/Composer/Composer.tsx
 import * as React from "react"
 
@@ -49,35 +49,39 @@ export const Provider: React.FC<{
 )
 
 // Atomic components
-export const Frame: React.FC<{ children: React.ReactNode }> = ...
-export const Input: React.FC = ...
-export const Footer: React.FC<{ children: React.ReactNode }> = ...
-export const Submit: React.FC = ...
+export const Frame: React.FC<{ children: React.ReactNode }> = ({ children }) => <div>{children}</div>
+export const Input: React.FC = () => <input />
+export const Footer: React.FC<{ children: React.ReactNode }> = ({ children }) => <footer>{children}</footer>
+export const Submit: React.FC = () => <button type="submit">Submit</button>
 ```
 
 ## Anti-Pattern: Boolean Props
 
-```typescript
+```tsx
 // ❌ WRONG
-<UserForm
-  isUpdate
-  hideWelcome
-  showEmail
-  redirectOnSuccess
-/>
+const wrong = (
+  <UserForm
+    isUpdate
+    hideWelcome
+    showEmail
+    redirectOnSuccess
+  />
+)
 
 // ✅ CORRECT - Compose specific forms
-<UpdateUserForm>
-  <UserForm.NameField />
-  <UserForm.SaveButton />
-</UpdateUserForm>
+const correct = (
+  <UpdateUserForm>
+    <UserForm.NameField />
+    <UserForm.SaveButton />
+  </UpdateUserForm>
+)
 ```
 
 ## State Lifting Pattern
 
 Lift state ABOVE components that need it:
 
-```typescript
+```tsx
 function Modal() {
   const [state, setState] = useState(initial)
 
@@ -95,7 +99,7 @@ function Modal() {
 
 ## Effect Atom Integration
 
-```typescript
+```tsx
 import { useAtomValue, useAtomSet } from "@effect-atom/atom-react"
 import * as Cart from "@/state/Cart"
 

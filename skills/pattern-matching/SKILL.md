@@ -114,7 +114,7 @@ class NotFound extends Data.TaggedError("NotFound")<{
   readonly id: string
 }> {}
 
-const getUser = (id: string): Effect.Effect<User, NotFound> => ...
+const getUser = (id: string): Effect.Effect<User, NotFound> => Effect.fail(new NotFound({ id }))
 
 const program = Effect.gen(function* () {
   const result = yield* Effect.either(getUser("123"))
@@ -145,7 +145,7 @@ class NotFound extends Data.TaggedError("NotFound")<{
   readonly id: string
 }> {}
 
-const getUser = (id: string): Effect.Effect<User, NotFound> => ...
+const getUser = (id: string): Effect.Effect<User, NotFound> => Effect.fail(new NotFound({ id }))
 
 const program = getUser("123").pipe(
   Effect.match({
@@ -319,7 +319,7 @@ if (status._tag === "Active") {
 }
 
 // Hard to use in Array methods
-const items: Status[] = [...]
+const items: Status[] = [Status.Active(), Status.Expired()]
 const activeItems = items.filter(item => item._tag === "Active")
 ```
 
@@ -335,7 +335,7 @@ if (Status.$is("Active")(status)) {
 }
 
 // Perfect for Array methods
-const items: Status[] = [...]
+const items: Status[] = [Status.Active(), Status.Expired()]
 const activeItems = items.filter(Status.$is("Active"))
 
 // Pipeline-friendly
@@ -380,7 +380,7 @@ Use `Option.match` instead of manual `._tag` checks on Options.
 // ❌ WRONG - Manual Option._tag checks
 import { Option } from "effect"
 
-const maybeUser: Option.Option<User> = ...
+const maybeUser: Option.Option<User> = Option.some({ name: "Alice", id: "123" })
 
 // Imperative and verbose
 if (maybeUser._tag === "Some") {
@@ -396,7 +396,7 @@ if (maybeUser._tag === "Some") {
 // ✅ CORRECT - Option.match
 import { Option } from "effect"
 
-const maybeUser: Option.Option<User> = ...
+const maybeUser: Option.Option<User> = Option.some({ name: "Alice", id: "123" })
 
 const display = Option.match(maybeUser, {
   onNone: () => "No user",
@@ -507,7 +507,7 @@ Use `Loadable.match` for async state pattern matching.
 
 ### Loadable Pattern
 
-```typescript
+```tsx
 import { Loadable } from "@/typeclass/Loadable"
 
 type UserData = Loadable.Loadable<User>

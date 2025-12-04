@@ -24,7 +24,7 @@ Build complex UIs from simple, composable pieces rather than configuring behavio
 
 **Anti-Pattern: Boolean Props**
 
-```typescript
+```tsx
 // L WRONG - Configuration through boolean props
 interface FormProps {
   isUpdate?: boolean
@@ -64,7 +64,7 @@ function UserForm({
 
 **Correct Pattern: Composition**
 
-```typescript
+```tsx
 //  CORRECT - Compose specific forms from atomic pieces
 export namespace UserForm {
   export const Frame: React.FC<{ children: React.ReactNode }> =
@@ -104,16 +104,16 @@ function UpdateUserForm() {
   )
 }
 
-// Usage is clear and explicit
-<CreateUserForm />
-<UpdateUserForm />
+// Usage is clear and explicit (in JSX context):
+// <CreateUserForm />
+// <UpdateUserForm />
 ```
 
 ### 2. Component Module Pattern
 
 Treat components like Effect modules with namespace imports and exported sub-components.
 
-```typescript
+```tsx
 // components/Composer/Composer.tsx
 import * as React from "react"
 
@@ -210,7 +210,7 @@ export const Submit: React.FC = () => {
 
 **Usage with Namespace Import**
 
-```typescript
+```tsx
 import * as Composer from "@/components/Composer"
 
 function MessageComposer() {
@@ -239,7 +239,7 @@ Lift state ABOVE all components that need access, not below.
 
 **Anti-Pattern: State Too Low**
 
-```typescript
+```tsx
 // L WRONG - State below components that need it
 function Modal() {
   return (
@@ -257,7 +257,7 @@ function Modal() {
 
 **Correct Pattern: Lift State Above**
 
-```typescript
+```tsx
 //  CORRECT - State above everything that needs it
 function Modal() {
   const [state, setState] = useState(initialComposerState)
@@ -397,7 +397,7 @@ export const clearCart = Atom.fn(
 
 ### Pattern: React Component with Atoms
 
-```typescript
+```tsx
 // components/Cart/CartView.tsx
 import { useAtomValue, useAtomSet } from "@effect-atom/atom-react"
 import * as Cart from "@/state/Cart"
@@ -448,7 +448,7 @@ export function CartView() {
 
 Different components can read/write the same atom reactively:
 
-```typescript
+```tsx
 // Component A - Read only
 function CartBadge() {
   const count = useAtomValue(Cart.itemCount)
@@ -537,7 +537,7 @@ export const loadUser = runtime.fn(
 
 **Component with Result Handling**
 
-```typescript
+```tsx
 import { useAtomValue, useAtomSetPromise } from "@effect-atom/atom-react"
 import * as Result from "@effect-atom/atom/Result"
 import * as User from "@/state/User"
@@ -569,7 +569,7 @@ Most `useEffect` usage is wrong. Consider these alternatives:
 
 ### Anti-Pattern: Unnecessary Effects
 
-```typescript
+```tsx
 // L WRONG - Using effect for derived state
 function UserCard({ user }: { user: User }) {
   const [fullName, setFullName] = useState("")
@@ -590,7 +590,7 @@ function UserCard({ user }: { user: User }) {
 
 ### Anti-Pattern: Effect for Expensive Computation
 
-```typescript
+```tsx
 // L WRONG - Effect for memoization
 function ProductList({ products }: { products: Product[] }) {
   const [filtered, setFiltered] = useState<Product[]>([])
@@ -615,7 +615,7 @@ function ProductList({ products }: { products: Product[] }) {
 
 ### Pattern: useTransition for Non-Blocking Updates
 
-```typescript
+```tsx
 import { useTransition } from "react"
 
 function SearchResults() {
@@ -644,7 +644,7 @@ function SearchResults() {
 
 ### Pattern: Keys for Resetting State
 
-```typescript
+```tsx
 // L WRONG - Effect to reset state
 function UserEditor({ userId }: { userId: string }) {
   const [formData, setFormData] = useState(initialData)
@@ -676,7 +676,7 @@ Use `useEffect` for:
 - Side effects that must run after render
 - Cleanup of subscriptions
 
-```typescript
+```tsx
 function ChatRoom({ roomId }: { roomId: string }) {
   useEffect(() => {
     // Connect to external system
@@ -696,7 +696,7 @@ function ChatRoom({ roomId }: { roomId: string }) {
 
 ### Pattern: Render Props for Flexibility
 
-```typescript
+```tsx
 export namespace DataTable {
   export interface RenderProps<T> {
     readonly data: ReadonlyArray<T>
@@ -751,7 +751,7 @@ function UserTable() {
 
 ### Pattern: Compound Components with Context
 
-```typescript
+```tsx
 export namespace Tabs {
   interface TabsContext {
     readonly activeTab: string
@@ -842,7 +842,7 @@ function Settings() {
 
 ### Pattern: Test Atomic Components
 
-```typescript
+```tsx
 import { render, screen } from "@testing-library/react"
 import * as Composer from "@/components/Composer"
 
@@ -867,7 +867,7 @@ describe("Composer.Input", () => {
 
 ### Pattern: Test Composed Features
 
-```typescript
+```tsx
 describe("MessageComposer", () => {
   it("composes correctly", () => {
     render(<MessageComposer />)
@@ -914,7 +914,7 @@ When implementing React components with Effect Atom, ensure:
 
 ### Mistake: Mixing Context and Atoms
 
-```typescript
+```tsx
 // L WRONG - Using Context for app-wide state
 const AppContext = React.createContext<AppState | null>(null)
 
@@ -940,7 +940,7 @@ function DeepComponent() {
 
 ### Mistake: Not Lifting State High Enough
 
-```typescript
+```tsx
 // L WRONG - State trapped in Modal
 function Modal() {
   return (
@@ -972,7 +972,7 @@ function ModalContainer() {
 
 ### Mistake: Overusing useEffect
 
-```typescript
+```tsx
 // L WRONG - Effect for derived data
 function OrderSummary({ order }: { order: Order }) {
   const [total, setTotal] = useState(0)

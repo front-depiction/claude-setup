@@ -207,7 +207,7 @@ layer(Database.Test)((it) => {
 
 // With name for describe block
 layer(Database.Test)("Database tests", (it) => {
-  it.effect("query test", () => /* ... */)
+  it.effect("query test", () => Effect.succeed(true))
 })
 ```
 

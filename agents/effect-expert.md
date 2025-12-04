@@ -140,10 +140,10 @@ export class PaymentWebhookGateway extends Context.Tag(
 export class PaymentService extends Context.Tag("PaymentService")<
   PaymentService,
   {
-    readonly processPayment: ...
-    readonly validateWebhook: ...
-    readonly refund: ...
-    readonly sendReceipt: ...
+    readonly processPayment: Effect.Effect<void>
+    readonly validateWebhook: Effect.Effect<void>
+    readonly refund: Effect.Effect<void>
+    readonly sendReceipt: Effect.Effect<void>
   }
 >() {}
 ```
@@ -159,7 +159,7 @@ export class Database extends Context.Tag("Database")<
   {
     readonly query: (sql: string) => Effect.Effect<QueryResult, QueryError, never>
     //                                                                          ▲
-    //                                                           No requirements leaked
+    //                                                        No requirements leaked
   }
 >() {}
 
@@ -180,7 +180,7 @@ Dependencies belong in the **layer construction**, not the service interface.
 
 ### Basic Layer Structure
 
-```typescript
+```text
 Layer<RequirementsOut, Error, RequirementsIn>
          ▲                ▲           ▲
          │                │           └─ Dependencies needed
@@ -456,12 +456,12 @@ export const getOrCreateUserCart = mutation({
 
 // ❌ WRONG - Unnecessary async/await
 export const getOrCreateUserCart = mutation({
-  args: { ... },
+  args: { /* schema */ },
   handler: async (ctx, args) =>
     await Effect.gen(function* () {
       const domain = yield* CartDomain
-      return yield* domain.getOrCreateUserCart(...)
-    }).pipe(...)
+      return yield* domain.getOrCreateUserCart(args)
+    }).pipe(Effect.runPromise)
 })
 ```
 
@@ -489,7 +489,10 @@ const processPayment = (
   gateway: PaymentGateway,  // Wrong
   logger: Logger,           // Wrong
   options: ProcessPaymentOptions
-) => { ... }
+) => {
+  // Don't pass infrastructure as parameters
+  return gateway.process(payment, options)
+}
 ```
 
 ## Quality Checklist
