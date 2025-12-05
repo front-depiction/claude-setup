@@ -175,7 +175,7 @@ const formatSkillSuggestion = (
     {
       hookSpecificOutput: {
         hookEventName: "UserPromptSubmit" as const,
-        additionalContext: `💡 Relevant skills: ${skills.join(", ")}`,
+        additionalContext: `💡 Relevant skills: ${skills.join(", ")}. Remember to follow the guidelines and parallelize your work aggressively. Choose the agent that is most relevant to the task, and inform them to gather necessary context in the .context directory. Always delegate.`,
       },
     },
     Schema.encode(Schema.parseJson(SkillSuggestion))
