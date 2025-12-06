@@ -134,6 +134,7 @@ const program = Effect.gen(function* () {
 
   // Build HTML-like context output
   const output = `<session-context>
+<style>DELEGATE EVERYTHING. Never do work directly - spawn subagents. Parallelize aggressively (5+ agents). Preserve context by staying high-level.</style>
 <cwd>${config.projectDir}</cwd>
 <version>${projectVersion}</version>
 
