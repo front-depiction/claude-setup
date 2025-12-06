@@ -74,7 +74,7 @@ export const ProjectStructureCaptureLive = Layer.effect(
     return ProjectStructureCapture.of({
       capture: () =>
         pipe(
-          Command.make("tree", "-L", "2", "-a"),
+          Command.make("tree", "-L", "2", "-a", "-I", "node_modules|.git|dist|.turbo|build|.next|.cache|coverage"),
           Command.workingDirectory(config.projectDir),
           Command.string,
           Effect.catchAll(() => Effect.succeed("(tree unavailable)")),
