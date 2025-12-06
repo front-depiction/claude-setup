@@ -16,6 +16,8 @@ Choose between witness (existence) and capability (behavior) patterns for Contex
 Field exists in the schema - tightly coupled to domain model:
 
 ```typescript
+import { Schema } from "effect"
+
 // ❌ HARD COUPLING - Serial is part of the schema
 export const PaymentIntent = Schema.Struct({
   id: Schema.String,
@@ -34,6 +36,10 @@ export const PaymentIntent = Schema.Struct({
 Field **removed from schema**, only injected in code:
 
 ```typescript
+import { Schema, Context, Effect, Logger } from "effect"
+
+declare const generateId: () => string
+
 // ✅ SOFT COUPLING - Serial not in schema
 export const PaymentIntent = Schema.Struct({
   id: Schema.String,
@@ -78,6 +84,15 @@ By removing the field from the schema and injecting it only where needed, you:
 Use when you only need to know something **exists** in the environment:
 
 ```typescript
+import { Schema, Context, Effect } from "effect"
+
+declare const PaymentIntent: Schema.Struct<{
+  id: typeof Schema.String
+  serial: typeof Schema.String
+  amount: typeof Schema.BigInt
+}>
+declare const other: any
+
 // Witness - a serial number exists
 export class Serial extends Context.Tag("Serial")<Serial, string>() {}
 
@@ -94,6 +109,15 @@ const createPaymentIntent = Effect.gen(function* () {
 Use when you need **operations**:
 
 ```typescript
+import { Schema, Context, Effect } from "effect"
+
+declare const PaymentIntent: Schema.Struct<{
+  id: typeof Schema.String
+  serial: typeof Schema.String
+  amount: typeof Schema.BigInt
+}>
+declare const other: any
+
 // Capability - can generate/validate
 export class SerialService extends Context.Tag("SerialService")<
   SerialService,
@@ -148,6 +172,11 @@ Good fits:
 
 Witnesses are trivial to provide:
 ```typescript
+import { Effect } from "effect"
+
+declare const myProgram: Effect.Effect<unknown, never, Serial>
+declare class Serial extends Context.Tag("Serial")<Serial, string>() {}
+
 const test = myProgram.pipe(
   Effect.provideService(Serial, "test-serial-123")
 )
@@ -155,6 +184,17 @@ const test = myProgram.pipe(
 
 Capabilities need implementation:
 ```typescript
+import { Effect } from "effect"
+
+declare const myProgram: Effect.Effect<unknown, never, SerialService>
+declare class SerialService extends Context.Tag("SerialService")<
+  SerialService,
+  {
+    readonly next: () => string
+    readonly validate: (s: string) => boolean
+  }
+>() {}
+
 const test = myProgram.pipe(
   Effect.provideService(SerialService, {
     next: () => "test-serial-123",
@@ -172,6 +212,12 @@ const test = myProgram.pipe(
 - **Yes** → Keep in schema
 
 ```typescript
+import { Schema, Context, Effect, Logger, Clock } from "effect"
+
+declare const LineItem: Schema.Schema<any>
+declare const generateId: () => string
+declare const calculateTotal: (items: Array<any>) => bigint
+
 // ✅ Domain model - only persisted data
 export const Order = Schema.Struct({
   id: Schema.String,
@@ -186,7 +232,7 @@ class CorrelationId extends Context.Tag("CorrelationId")<CorrelationId, string>(
 class RequestId extends Context.Tag("RequestId")<RequestId, string>() {}
 
 // Use in code, not in data
-const createOrder = (items: Array<LineItem>) =>
+const createOrder = (items: Array<Schema.Schema.Type<typeof LineItem>>) =>
   Effect.gen(function* () {
     const correlationId = yield* CorrelationId  // For tracing
     const requestId = yield* RequestId          // For logging

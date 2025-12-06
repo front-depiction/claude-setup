@@ -24,6 +24,8 @@ Use `@effect/vitest` when testing:
 import { it, expect } from "@effect/vitest"
 import { Effect } from "effect"
 
+declare const fetchUser: (id: string) => Effect.Effect<{ id: string }, Error>
+
 it.effect("should fetch user", () =>
   Effect.gen(function* () {
     const user = yield* fetchUser("123")
@@ -43,6 +45,11 @@ Use standard `vitest` for:
 ```typescript
 import { describe, expect, it } from "vitest"
 
+declare const Cents: {
+  make: (value: bigint) => bigint
+  add: (a: bigint, b: bigint) => bigint
+}
+
 describe("Cents", () => {
   it("should add cents correctly", () => {
     const result = Cents.add(Cents.make(100n), Cents.make(50n))
@@ -58,6 +65,12 @@ describe("Cents", () => {
 Provides `TestContext` including `TestClock`, `TestRandom`, etc.
 
 ```typescript
+import { it, expect } from "@effect/vitest"
+import { Effect } from "effect"
+
+declare const someEffect: Effect.Effect<number>
+declare const expected: number
+
 it.effect("test name", () =>
   Effect.gen(function* () {
     // Test implementation with TestContext available
@@ -72,6 +85,9 @@ it.effect("test name", () =>
 Uses real services (real clock, real random, etc.).
 
 ```typescript
+import { it } from "@effect/vitest"
+import { Effect, Clock } from "effect"
+
 it.live("test with real time", () =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis
@@ -85,6 +101,12 @@ it.live("test with real time", () =>
 For tests requiring `Scope` to manage resource lifecycle.
 
 ```typescript
+import { it } from "@effect/vitest"
+import { Effect } from "effect"
+
+declare const acquire: Effect.Effect<unknown>
+declare const release: Effect.Effect<void>
+
 it.scoped("test with resources", () =>
   Effect.gen(function* () {
     const resource = yield* Effect.acquireRelease(
@@ -101,6 +123,12 @@ it.scoped("test with resources", () =>
 Uses live environment with scope for resource management.
 
 ```typescript
+import { it } from "@effect/vitest"
+import { Effect } from "effect"
+
+declare const acquireRealResource: Effect.Effect<unknown>
+declare const releaseRealResource: Effect.Effect<void>
+
 it.scopedLive("live test with resources", () =>
   Effect.gen(function* () {
     const resource = yield* Effect.acquireRelease(
@@ -118,7 +146,11 @@ it.scopedLive("live test with resources", () =>
 For all assertions, use the standard `expect` from vitest:
 
 ```typescript
-import { expect } from "@effect/vitest"
+import { it, expect } from "@effect/vitest"
+import { Effect } from "effect"
+
+declare const computation: Effect.Effect<number>
+declare const array: unknown[]
 
 it.effect("assertions", () =>
   Effect.gen(function* () {
@@ -135,6 +167,7 @@ it.effect("assertions", () =>
 `@effect/vitest` provides additional assertion utilities in `utils`:
 
 ```typescript
+import { it } from "@effect/vitest"
 import {
   assertEquals,       // Uses Effect's Equal.equals
   assertTrue,
@@ -146,6 +179,11 @@ import {
   assertSuccess,     // For Exit.Success
   assertFailure      // For Exit.Failure
 } from "@effect/vitest/utils"
+import { Effect, Option, Either } from "effect"
+
+declare const someOptionalEffect: Effect.Effect<Option.Option<number>>
+declare const someEitherEffect: Effect.Effect<Either.Either<number, Error>>
+declare const expectedValue: number
 
 it.effect("with effect assertions", () =>
   Effect.gen(function* () {
@@ -165,9 +203,19 @@ it.effect("with effect assertions", () =>
 Use `Effect.provide` to supply test implementations:
 
 ```typescript
+import { it, expect } from "@effect/vitest"
+import { Effect, Context, Layer } from "effect"
+
+class UserService extends Context.Tag("UserService")<UserService, {
+  getUser: (id: string) => Effect.Effect<{ name: string }>
+}>() {}
+
+declare const TestUserServiceLayer: Layer.Layer<UserService>
+
 it.effect("should work with dependencies", () =>
   Effect.gen(function* () {
-    const result = yield* UserService.getUser("123")
+    const userService = yield* UserService
+    const result = yield* userService.getUser("123")
     expect(result.name).toBe("John")
   }).pipe(Effect.provide(TestUserServiceLayer))
 )
@@ -178,7 +226,8 @@ it.effect("should work with dependencies", () =>
 Share a layer across multiple tests with the `layer` function:
 
 ```typescript
-import { layer } from "@effect/vitest"
+import { layer, it, expect } from "@effect/vitest"
+import { Effect, Context, Layer } from "effect"
 
 class Database extends Context.Tag("Database")<Database, {
   query: (sql: string) => Effect.Effect<Array<unknown>>
@@ -216,6 +265,20 @@ layer(Database.Test)("Database tests", (it) => {
 Compose layers for complex dependencies:
 
 ```typescript
+import { layer, it } from "@effect/vitest"
+import { Effect, Context, Layer } from "effect"
+
+class Database extends Context.Tag("Database")<Database, {
+  query: (sql: string) => Effect.Effect<Array<unknown>>
+}>() {}
+
+class UserService extends Context.Tag("UserService")<UserService, {
+  getUser: (id: string) => Effect.Effect<unknown>
+}>() {}
+
+declare const DatabaseLayer: Layer.Layer<Database>
+declare const UserServiceLayer: Layer.Layer<UserService, never, Database>
+
 layer(DatabaseLayer)((it) => {
   it.layer(UserServiceLayer)("user tests", (it) => {
     it.effect("has both dependencies", () =>
@@ -234,6 +297,11 @@ layer(DatabaseLayer)((it) => {
 Use live services instead of test services:
 
 ```typescript
+import { layer, it } from "@effect/vitest"
+import { Effect, Layer } from "effect"
+
+declare const MyServiceLayer: Layer.Layer<never>
+
 layer(MyServiceLayer, { excludeTestServices: true })((it) => {
   it.effect("uses real clock", () =>
     Effect.gen(function* () {
@@ -250,7 +318,8 @@ layer(MyServiceLayer, { excludeTestServices: true })((it) => {
 `TestClock` allows controlling time without waiting:
 
 ```typescript
-import { TestClock } from "effect"
+import { it, expect } from "@effect/vitest"
+import { Effect, TestClock, Fiber } from "effect"
 
 it.effect("should handle delays", () =>
   Effect.gen(function* () {
@@ -272,6 +341,9 @@ it.effect("should handle delays", () =>
 Test periodic operations efficiently:
 
 ```typescript
+import { it, expect } from "@effect/vitest"
+import { Effect, Queue, TestClock, Option } from "effect"
+
 it.effect("should execute every minute", () =>
   Effect.gen(function* () {
     const queue = yield* Queue.unbounded<number>()
@@ -305,6 +377,9 @@ it.effect("should execute every minute", () =>
 ### Testing Clock Methods
 
 ```typescript
+import { it, expect } from "@effect/vitest"
+import { Effect, Clock, TestClock } from "effect"
+
 it.effect("should track time correctly", () =>
   Effect.gen(function* () {
     const start = yield* Clock.currentTimeMillis
@@ -321,6 +396,9 @@ it.effect("should track time correctly", () =>
 ### TestClock with Deferred
 
 ```typescript
+import { it, expect } from "@effect/vitest"
+import { Effect, Deferred, TestClock } from "effect"
+
 it.effect("should handle deferred with delays", () =>
   Effect.gen(function* () {
     const deferred = yield* Deferred.make<number, void>()
@@ -346,6 +424,15 @@ it.effect("should handle deferred with delays", () =>
 Use `Effect.flip` to convert failures to successes:
 
 ```typescript
+import { it, expect } from "@effect/vitest"
+import { Effect, Data } from "effect"
+
+class UserNotFoundError extends Data.TaggedError("UserNotFoundError")<{
+  userId: string
+}> {}
+
+declare const failingOperation: () => Effect.Effect<never, UserNotFoundError>
+
 it.effect("should fail with error", () =>
   Effect.gen(function* () {
     const error = yield* Effect.flip(failingOperation())
@@ -360,6 +447,11 @@ it.effect("should fail with error", () =>
 Use `Effect.exit` to capture both success and failure:
 
 ```typescript
+import { it, expect } from "@effect/vitest"
+import { Effect, Exit } from "effect"
+
+declare const divide: (a: number, b: number) => Effect.Effect<number, string>
+
 it.effect("should handle success", () =>
   Effect.gen(function* () {
     const exit = yield* Effect.exit(divide(4, 2))
@@ -378,6 +470,21 @@ it.effect("should handle failure", () =>
 ### Testing Error Types
 
 ```typescript
+import { it, expect } from "@effect/vitest"
+import { Effect, Exit, Cause, Context, Data } from "effect"
+
+class NotFoundError extends Data.TaggedError("NotFoundError")<{
+  id: string
+}> {}
+
+class UserService extends Context.Tag("UserService")<UserService, {
+  getUser: (id: string) => Effect.Effect<unknown, NotFoundError>
+}>() {}
+
+declare const userService: {
+  getUser: (id: string) => Effect.Effect<unknown, NotFoundError>
+}
+
 it.effect("should fail with specific error", () =>
   Effect.gen(function* () {
     const exit = yield* Effect.exit(
@@ -421,6 +528,15 @@ it.prop(
 ### Using it.effect.prop for Effect Properties
 
 ```typescript
+import { it } from "@effect/vitest"
+import { Effect, Context } from "effect"
+import { FastCheck } from "effect"
+
+class Database extends Context.Tag("Database")<Database, {
+  set: (key: string, value: number) => Effect.Effect<void>
+  get: (key: string) => Effect.Effect<number>
+}>() {}
+
 it.effect.prop(
   "database operations are idempotent",
   [FastCheck.string(), FastCheck.integer()],
@@ -442,7 +558,8 @@ it.effect.prop(
 ### With Schema Arbitraries
 
 ```typescript
-import { Schema } from "effect"
+import { it, expect } from "@effect/vitest"
+import { Effect, Schema } from "effect"
 
 const User = Schema.Struct({
   id: Schema.String,
@@ -464,6 +581,9 @@ it.effect.prop(
 ### Configuring FastCheck
 
 ```typescript
+import { it } from "@effect/vitest"
+import { Effect, FastCheck } from "effect"
+
 it.effect.prop(
   "property test",
   [FastCheck.integer()],
@@ -484,6 +604,11 @@ it.effect.prop(
 ### Skipping Tests
 
 ```typescript
+import { it } from "@effect/vitest"
+import { Effect } from "effect"
+
+declare const condition: boolean
+
 it.effect.skip("not ready yet", () =>
   Effect.gen(function* () {
     // Will not run
@@ -500,6 +625,9 @@ it.effect.skipIf(condition)("conditional skip", () =>
 ### Running Single Tests
 
 ```typescript
+import { it } from "@effect/vitest"
+import { Effect } from "effect"
+
 it.effect.only("debug this test", () =>
   Effect.gen(function* () {
     // Only this test runs
@@ -510,6 +638,9 @@ it.effect.only("debug this test", () =>
 ### Running Conditionally
 
 ```typescript
+import { it } from "@effect/vitest"
+import { Effect } from "effect"
+
 it.effect.runIf(process.env.INTEGRATION_TESTS)("integration test", () =>
   Effect.gen(function* () {
     // Only runs if condition is true
@@ -520,6 +651,9 @@ it.effect.runIf(process.env.INTEGRATION_TESTS)("integration test", () =>
 ### Expecting Failures
 
 ```typescript
+import { it, expect } from "@effect/vitest"
+import { Effect } from "effect"
+
 it.effect.fails("known failing test", () =>
   Effect.gen(function* () {
     // This test is expected to fail
@@ -534,6 +668,9 @@ it.effect.fails("known failing test", () =>
 Use `it.flakyTest` for operations that may fail intermittently:
 
 ```typescript
+import { it } from "@effect/vitest"
+import { Effect, Random } from "effect"
+
 it.effect("retrying flaky operation", () =>
   it.flakyTest(
     Effect.gen(function* () {
@@ -552,6 +689,9 @@ it.effect("retrying flaky operation", () =>
 ### Default Behavior (Suppressed)
 
 ```typescript
+import { it } from "@effect/vitest"
+import { Effect } from "effect"
+
 it.effect("logs are suppressed", () =>
   Effect.gen(function* () {
     yield* Effect.log("This won't appear")
@@ -562,7 +702,8 @@ it.effect("logs are suppressed", () =>
 ### Enabling Logs
 
 ```typescript
-import { Logger } from "effect"
+import { it } from "@effect/vitest"
+import { Effect, Logger } from "effect"
 
 it.effect("logs visible", () =>
   Effect.gen(function* () {
@@ -583,6 +724,15 @@ it.live("logs visible", () =>
 ### Arrange-Act-Assert Pattern
 
 ```typescript
+import { describe, it, expect } from "@effect/vitest"
+import { Effect, Context, Layer } from "effect"
+
+class UserService extends Context.Tag("UserService")<UserService, {
+  getUser: (id: string) => Effect.Effect<{ id: string; name: string }>
+}>() {}
+
+declare const TestUserServiceLayer: Layer.Layer<UserService>
+
 describe("UserService", () => {
   describe("getUser", () => {
     it.effect("should return user by id", () =>
@@ -606,6 +756,9 @@ describe("UserService", () => {
 ### Testing STM Operations
 
 ```typescript
+import { it, expect } from "@effect/vitest"
+import { Effect, STM, TRef } from "effect"
+
 it.effect("should handle concurrent updates", () =>
   Effect.gen(function* () {
     const counter = yield* TRef.make(0)
@@ -624,6 +777,19 @@ it.effect("should handle concurrent updates", () =>
 ### Testing CRDT Operations
 
 ```typescript
+import { it, expect } from "@effect/vitest"
+import { Effect, STM } from "effect"
+
+declare const GCounter: {
+  make: (id: string) => Effect.Effect<unknown>
+  increment: (counter: unknown, value: number) => STM.STM<void>
+  query: (counter: unknown) => STM.STM<unknown>
+  merge: (counter: unknown, state: unknown) => STM.STM<void>
+  value: (counter: unknown) => STM.STM<number>
+}
+
+declare const ReplicaId: (id: string) => string
+
 it.effect("should merge states correctly", () =>
   Effect.gen(function* () {
     const counter1 = yield* GCounter.make(ReplicaId("replica-1"))
@@ -662,16 +828,22 @@ Before completing a testing task, verify:
 ### Don't Mix expect with assert
 
 ```typescript
-// L Wrong - mixing assertion libraries
-import { assert } from "@effect/vitest"
+// ❌ Wrong - mixing assertion libraries
+import { it } from "@effect/vitest"
+import { Effect } from "effect"
+
+declare const result: unknown
+declare const expected: unknown
+
 it.effect("test", () =>
   Effect.gen(function* () {
-    assert.strictEqual(result, expected)  // Don't use this
+    // assert.strictEqual(result, expected)  // Don't use this
   })
 )
 
-//  Correct - use expect
-import { expect } from "@effect/vitest"
+// ✅ Correct - use expect
+import { it, expect } from "@effect/vitest"
+
 it.effect("test", () =>
   Effect.gen(function* () {
     expect(result).toBe(expected)
@@ -682,7 +854,10 @@ it.effect("test", () =>
 ### Don't Forget to Fork for TestClock
 
 ```typescript
-// L Wrong - will hang waiting for real time
+import { it } from "@effect/vitest"
+import { Effect, TestClock, Fiber } from "effect"
+
+// ❌ Wrong - will hang waiting for real time
 it.effect("test", () =>
   Effect.gen(function* () {
     yield* Effect.sleep("5 seconds")  // Blocks!
@@ -690,7 +865,7 @@ it.effect("test", () =>
   })
 )
 
-//  Correct - fork the effect
+// ✅ Correct - fork the effect
 it.effect("test", () =>
   Effect.gen(function* () {
     const fiber = yield* Effect.fork(Effect.sleep("5 seconds"))
@@ -703,20 +878,28 @@ it.effect("test", () =>
 ### Provide Layers to Effect, Not Test
 
 ```typescript
-// L Wrong - providing to wrong level
+import { it, expect } from "@effect/vitest"
+import { Effect, Layer } from "effect"
+
+declare const someEffect: Effect.Effect<number>
+declare const expected: number
+declare const layer: Layer.Layer<never>
+
+// ❌ Wrong - providing to wrong level
 it.effect("test", () =>
   Effect.gen(function* () {
     const result = yield* someEffect
     expect(result).toBe(expected)
   })
-).pipe(Effect.provide(layer))  // L Can't provide to test function
+)  // ❌ Can't provide to test function
+// .pipe(Effect.provide(layer))
 
-//  Correct - provide to Effect
+// ✅ Correct - provide to Effect
 it.effect("test", () =>
   Effect.gen(function* () {
     const result = yield* someEffect
     expect(result).toBe(expected)
-  }).pipe(Effect.provide(layer))  //  Provide to Effect
+  }).pipe(Effect.provide(layer))  // ✅ Provide to Effect
 )
 ```
 

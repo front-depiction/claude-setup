@@ -100,6 +100,8 @@ Every domain model module MUST include:
 ### 1. Type Definition with Schemas
 
 ```typescript
+import { Schema } from "effect"
+
 // Export both schema and type for each variant
 export const Admin = Schema.TaggedStruct("Admin", {
   id: Schema.String,
@@ -135,7 +137,13 @@ export type User = Schema.Schema.Type<typeof User>
 ### 2. Constructors Using Schema.decodeSync
 
 ```typescript
+import { Schema } from "effect"
 import * as DateTime from "effect/DateTime"
+
+// Assume we have these schemas from previous section
+declare const Pending: Schema.Schema<any, any, never>
+declare const Active: Schema.Schema<any, any, never>
+declare const Completed: Schema.Schema<any, any, never>
 
 /**
  * Create a pending task.
@@ -189,6 +197,20 @@ export const makeCompleted = Schema.decodeSync(Completed)
 ### 3. Guards and Type Predicates
 
 ```typescript
+import { Schema } from "effect"
+
+// Assume Task type from previous section
+declare type Task =
+  | { readonly _tag: "pending"; readonly id: string; readonly createdAt: any }
+  | { readonly _tag: "active"; readonly id: string; readonly createdAt: any; readonly startedAt: any }
+  | { readonly _tag: "completed"; readonly id: string; readonly createdAt: any; readonly completedAt: any }
+
+declare type Pending = Extract<Task, { readonly _tag: "pending" }>
+declare type Active = Extract<Task, { readonly _tag: "active" }>
+declare type Completed = Extract<Task, { readonly _tag: "completed" }>
+
+declare const Task: Schema.Schema<Task, any, never>
+
 /**
  * Type guard for Task union.
  *
@@ -240,6 +262,12 @@ export const isCompleted = (self: Task): self is Completed => self._tag === "com
 ```typescript
 import * as Match from "effect/Match"
 
+// Assume Task type from previous section
+declare type Task =
+  | { readonly _tag: "pending"; readonly id: string; readonly createdAt: any }
+  | { readonly _tag: "active"; readonly id: string; readonly createdAt: any; readonly startedAt: any }
+  | { readonly _tag: "completed"; readonly id: string; readonly createdAt: any; readonly completedAt: any }
+
 /**
  * Pattern match on Task using Match.typeTags.
  *
@@ -267,8 +295,17 @@ export const match = Match.typeTags<Task>()
 ### 5. Equivalence (Usually Automatic via Schema.Data)
 
 ```typescript
+import { Schema } from "effect"
 import * as Equal from "effect/Equal"
 import * as Equivalence from "effect/Equivalence"
+
+// Assume Task type and schema from previous section
+declare type Task =
+  | { readonly _tag: "pending"; readonly id: string; readonly createdAt: any }
+  | { readonly _tag: "active"; readonly id: string; readonly createdAt: any; readonly startedAt: any }
+  | { readonly _tag: "completed"; readonly id: string; readonly createdAt: any; readonly completedAt: any }
+
+declare const Task: Schema.Schema<Task, any, never>
 
 /**
  * Primary approach: Use Equal.equals() from Schema.Data
@@ -284,14 +321,6 @@ import * as Equivalence from "effect/Equivalence"
  *   // Tasks are structurally equal
  * }
  */
-
-/**
- * Export Equivalence only when you need multiple comparison strategies.
- *
- * @category Equivalence
- * @since 0.1.0
- */
-export const Equivalence = Schema.equivalence(Task)
 
 /**
  * Field-based equivalence using Equivalence.mapInput
@@ -312,12 +341,12 @@ export const EquivalenceById = Equivalence.mapInput(
 )
 ```
 
-**When to Export Equivalence:**
+**When to Export Custom Equivalence:**
 - You need multiple comparison strategies (by ID, by group, etc.)
 - Field-based equality is semantically meaningful
 - Business logic requires custom equality checks
 
-**When NOT to Export Equivalence:**
+**When NOT to Export Custom Equivalence:**
 - You only need structural equality (use `Equal.equals()` directly)
 - No custom comparison logic is needed
 
@@ -330,6 +359,12 @@ Include these when semantically appropriate:
 When the type has a natural "zero" or "empty" value:
 
 ```typescript
+// Assume Cents and List types exist
+declare type Cents = bigint
+declare function make(value: bigint): Cents
+declare type List<T> = ReadonlyArray<T>
+declare function makeEmpty<T>(): List<T>
+
 /**
  * Zero value for monetary amounts.
  *
@@ -353,6 +388,10 @@ Functions that combine or transform values:
 
 ```typescript
 import { dual } from "effect/Function"
+
+// Assume Cents type exists
+declare type Cents = bigint
+declare function make(value: bigint): Cents
 
 /**
  * Add two monetary values.
@@ -394,6 +433,12 @@ Provide sorting capabilities using `Order.mapInput`:
 ```typescript
 import * as Order from "effect/Order"
 import * as DateTime from "effect/DateTime"
+
+// Assume Task type from previous section
+declare type Task =
+  | { readonly _tag: "pending"; readonly id: string; readonly createdAt: DateTime.DateTime.Utc }
+  | { readonly _tag: "active"; readonly id: string; readonly createdAt: DateTime.DateTime.Utc; readonly startedAt: DateTime.DateTime.Utc }
+  | { readonly _tag: "completed"; readonly id: string; readonly createdAt: DateTime.DateTime.Utc; readonly completedAt: DateTime.DateTime.Utc }
 
 /**
  * Order by tag (pending < active < completed).
@@ -468,6 +513,14 @@ export const OrderByTagThenDate: Order.Order<Task> = Order.combine(
 Safe extraction of inner values:
 
 ```typescript
+import * as DateTime from "effect/DateTime"
+
+// Assume Task type from previous section
+declare type Task =
+  | { readonly _tag: "pending"; readonly id: string; readonly createdAt: DateTime.DateTime.Utc }
+  | { readonly _tag: "active"; readonly id: string; readonly createdAt: DateTime.DateTime.Utc; readonly startedAt: DateTime.DateTime.Utc }
+  | { readonly _tag: "completed"; readonly id: string; readonly createdAt: DateTime.DateTime.Utc; readonly completedAt: DateTime.DateTime.Utc }
+
 /**
  * Get the ID from any Task variant.
  *
@@ -494,6 +547,12 @@ export const getCreatedAt = (self: Task): DateTime.DateTime.Utc =>
 
 ```typescript
 import { dual } from "effect/Function"
+
+// Assume Task type from previous section
+declare type Task =
+  | { readonly _tag: "pending"; readonly id: string; readonly createdAt: any }
+  | { readonly _tag: "active"; readonly id: string; readonly createdAt: any; readonly startedAt: any }
+  | { readonly _tag: "completed"; readonly id: string; readonly createdAt: any; readonly completedAt: any }
 
 /**
  * Update a field immutably.
@@ -579,7 +638,7 @@ For types that need additional runtime guarantees:
 
 ```typescript
 import * as Brand from "effect/Brand"
-import * as Schema from "effect/Schema"
+import { Schema } from "effect"
 
 /**
  * Email branded type with validation.
@@ -611,7 +670,21 @@ export const EmailSchema: Schema.BrandSchema<Email, string> =
 Check the project's `@/typeclass/` directory for available typeclasses:
 
 ```typescript
-import * as Schedulable$ from "@/typeclass/Schedulable"
+// Assume Schedulable typeclass exists
+declare namespace Schedulable$ {
+  function make<A>(
+    get: (self: A) => any,
+    set: (self: A, date: any) => A
+  ): any
+  function isScheduledBefore(instance: any): (a: any, b: any) => boolean
+  function OrderByScheduledDate(instance: any): any
+}
+
+// Assume Task type from previous section
+declare type Task =
+  | { readonly _tag: "pending"; readonly id: string; readonly createdAt: any }
+  | { readonly _tag: "active"; readonly id: string; readonly createdAt: any; readonly startedAt: any }
+  | { readonly _tag: "completed"; readonly id: string; readonly createdAt: any; readonly completedAt: any }
 
 /**
  * Schedulable instance for Task.
@@ -642,12 +715,16 @@ export const OrderByScheduledDate = Schedulable$.OrderByScheduledDate(Schedulabl
 **CRITICAL**: Always use namespace imports:
 
 ```typescript
-//  CORRECT
+// CORRECT
 import * as Task from "@/schemas/Task"
 import * as DateTime from "effect/DateTime"
 import * as Array from "effect/Array"
 import * as Order from "effect/Order"
 import * as Equal from "effect/Equal"
+
+declare const tasks: ReadonlyArray<Task.Task>
+declare const task1: Task.Task
+declare const task2: Task.Task
 
 const task = Task.makePending({
   id: "123",
@@ -661,7 +738,7 @@ const areEqual = Equal.equals(task1, task2)
 **NEVER** do this:
 
 ```typescript
-// L WRONG - loses context, causes name clashes
+// WRONG - loses context, causes name clashes
 import { makePending, isPending } from "@/schemas/Task"
 ```
 
@@ -676,7 +753,8 @@ import { makePending, isPending } from "@/schemas/Task"
 Always use DateTime and Duration, never Date or number:
 
 ```typescript
-//  CORRECT
+// CORRECT
+import { Schema } from "effect"
 import * as DateTime from "effect/DateTime"
 import * as Duration from "effect/Duration"
 
@@ -685,8 +763,8 @@ export const Task = Schema.TaggedStruct("task", {
   duration: Schema.Duration,               // Duration type
 }).pipe(Schema.Data)
 
-// L WRONG
-export const Task = Schema.TaggedStruct("task", {
+// WRONG
+export const TaskBad = Schema.TaggedStruct("task", {
   createdAt: Schema.Date,        // Native Date
   duration: Schema.Number,       // Number milliseconds
 })
@@ -698,6 +776,12 @@ Use the Data module for immutable operations:
 
 ```typescript
 import { Data } from "effect"
+
+// Assume Task type from previous section
+declare type Task =
+  | { readonly _tag: "pending"; readonly id: string; readonly createdAt: any }
+  | { readonly _tag: "active"; readonly id: string; readonly createdAt: any; readonly startedAt: any }
+  | { readonly _tag: "completed"; readonly id: string; readonly createdAt: any; readonly completedAt: any }
 
 /**
  * Immutable update.
@@ -719,6 +803,11 @@ Every exported member MUST have:
 - `@example` with fully working code including all imports
 
 ```typescript
+import { Schema } from "effect"
+import * as DateTime from "effect/DateTime"
+
+declare const Pending: Schema.Schema<any, any, never>
+
 /**
  * Create a pending task.
  *

@@ -26,6 +26,7 @@ import { FileSystem, Path } from "@effect/platform"
 
 ```typescript
 import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
 
 const program = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
@@ -61,6 +62,13 @@ const program = Effect.gen(function* () {
 
 ```typescript
 import { SystemError } from "@effect/platform/Error"
+import { Effect, Match } from "effect"
+
+declare const program: Effect.Effect<void, SystemError>
+
+class AccessDeniedError extends Error {
+  readonly _tag = "AccessDeniedError"
+}
 
 program.pipe(
   Effect.catchTag("SystemError", (error) =>
@@ -81,6 +89,7 @@ program.pipe(
 
 ```typescript
 import { Path } from "@effect/platform"
+import { Effect } from "effect"
 
 const program = Effect.gen(function* () {
   const path = yield* Path.Path
@@ -105,7 +114,7 @@ const program = Effect.gen(function* () {
 ### Args - Positional Arguments
 
 ```typescript
-import { Args } from "@effect/cli"
+import { Args, Schema } from "@effect/cli"
 
 Args.text({ name: "name" })
 Args.integer({ name: "count" })
@@ -139,6 +148,7 @@ Options.repeated  // Accept multiple
 
 ```typescript
 import { Command, Args, Options } from "@effect/cli"
+import { Console, Effect } from "effect"
 
 const greet = Command.make(
   "greet",
@@ -156,7 +166,7 @@ const greet = Command.make(
 // Subcommands
 const git = Command.make("git").pipe(
   Command.withSubcommands([
-    Command.make("clone", { url: Args.text({ name: "url" }) }, 
+    Command.make("clone", { url: Args.text({ name: "url" }) },
       ({ url }) => Console.log(`Cloning ${url}`)),
     Command.make("commit", { message: Options.text("message").pipe(Options.withAlias("m")) },
       ({ message }) => Console.log(`Committing: ${message}`))
@@ -167,7 +177,11 @@ const git = Command.make("git").pipe(
 ### Running the CLI
 
 ```typescript
+import { Command } from "@effect/cli"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
+import { Effect, pipe } from "effect"
+
+declare const myCommand: Command.Command<any, any, any, any>
 
 const cli = Command.run(myCommand, { name: "my-cli", version: "1.0.0" })
 
@@ -186,6 +200,7 @@ Execute system processes (distinct from CLI `Command`).
 
 ```typescript
 import { Command, CommandExecutor } from "@effect/platform"
+import { Effect, pipe } from "effect"
 
 const program = Effect.gen(function* () {
   const executor = yield* CommandExecutor.CommandExecutor
@@ -231,6 +246,10 @@ const program = Effect.gen(function* () {
 ```typescript
 // Bun
 import { BunContext, BunRuntime } from "@effect/platform-bun"
+import { Effect, pipe } from "effect"
+
+declare const program: Effect.Effect<void>
+
 pipe(program, Effect.provide(BunContext.layer), BunRuntime.runMain)
 
 // Node
@@ -243,6 +262,12 @@ Both provide: `FileSystem`, `Path`, `CommandExecutor`, `Terminal`, `WorkerManage
 ### Testing with Mocks
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { SystemError } from "@effect/platform/Error"
+import { Effect, Layer } from "effect"
+
+declare const program: Effect.Effect<void, never, FileSystem.FileSystem>
+
 const FileSystemMock = Layer.succeed(
   FileSystem.FileSystem,
   FileSystem.FileSystem.of({
@@ -260,6 +285,12 @@ const test = program.pipe(Effect.provide(FileSystemMock))
 ### Layer Composition
 
 ```typescript
+import { FileSystem, Path } from "@effect/platform"
+import { BunRuntime } from "@effect/platform-bun"
+import { Context, Effect, Layer, pipe } from "effect"
+
+declare const program: Effect.Effect<void>
+
 class MyService extends Context.Tag("MyService")<MyService, { doWork: () => Effect.Effect<void> }>() {}
 
 const MyServiceLive = Layer.effect(
@@ -272,6 +303,8 @@ const MyServiceLive = Layer.effect(
     })
   })
 )
+
+declare const BunContext: { layer: Layer.Layer<any> }
 
 const AppLive = MyServiceLive.pipe(Layer.provide(BunContext.layer))
 pipe(program, Effect.provide(AppLive), BunRuntime.runMain)
@@ -289,7 +322,7 @@ pipe(program, Effect.provide(AppLive), BunRuntime.runMain)
 import { Args, Command, Options } from "@effect/cli"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { FileSystem, Path } from "@effect/platform"
-import { Console, Context, Effect, Layer, Match, pipe, Schema } from "effect"
+import { Console, Context, Effect, Layer, pipe } from "effect"
 
 // Service
 class Transformer extends Context.Tag("Transformer")<
@@ -372,4 +405,5 @@ pipe(cli(process.argv), Effect.provide(AppLive), BunRuntime.runMain)
 4. **Handle errors with catchTag** - Match on specific error reasons
 5. **Stream large files** - Use `fs.stream` instead of `readFile`
 6. **Test with mocks** - Mock FileSystem for unit tests
-7. **Scope temp resources** - Use `makeTempFileScoped` for auto-cleanup0. **Compose layers cleanly** - Build application layer from service layers and platform layer
+7. **Scope temp resources** - Use `makeTempFileScoped` for auto-cleanup
+8. **Compose layers cleanly** - Build application layer from service layers and platform layer

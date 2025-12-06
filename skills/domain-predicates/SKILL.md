@@ -12,12 +12,17 @@ Generate complete sets of predicates and Order instances for domain types, deriv
 When using schemas, leverage `Schema.Data` for automatic structural equality:
 
 ```typescript
-import { Schema, Equal } from "effect"
+import { Schema, Equal, DateTime } from "effect"
 
 export const Task = Schema.TaggedStruct("pending", {
   id: Schema.String,
   createdAt: Schema.DateTimeUtcFromSelf,
 }).pipe(Schema.Data) // Implements Equal.Symbol automatically
+
+export type Task = Schema.Schema.Type<typeof Task>
+
+declare const makeTask: (props: { id: string; createdAt: DateTime.Utc }) => Task
+declare const now: DateTime.Utc
 
 // Usage: Automatic structural equality
 const task1 = makeTask({ id: "123", createdAt: now })
@@ -31,13 +36,19 @@ Equal.equals(task1, task2) // true - structural equality
 When you need an `Equivalence` instance (for use with combinators), derive it from the schema:
 
 ```typescript
+import { Schema, Array } from "effect"
 import * as Equivalence from "effect/Equivalence"
 
+declare const Task: Schema.Schema<any, any, never>
+type Task = Schema.Schema.Type<typeof Task>
+
 // Derive from schema (structural equality)
-export const Equivalence = Schema.equivalence(Task)
+export const TaskEquivalence = Schema.equivalence(Task)
+
+declare const tasks: Array<Task>
 
 // Usage with combinators
-const uniqueTasks = Array.dedupeWith(tasks, Equivalence)
+const uniqueTasks = Array.dedupeWith(tasks, TaskEquivalence)
 ```
 
 ## Pattern: Field-Based Equivalence with Equivalence.mapInput
@@ -45,7 +56,14 @@ const uniqueTasks = Array.dedupeWith(tasks, Equivalence)
 Compare by specific fields using `Equivalence.mapInput`:
 
 ```typescript
+import { DateTime } from "effect"
 import * as Equivalence from "effect/Equivalence"
+
+interface Task {
+  readonly _tag: string
+  readonly id: string
+  readonly createdAt: DateTime.Utc
+}
 
 /**
  * Compare tasks by ID only.
@@ -97,7 +115,18 @@ export const EquivalenceByCreatedAt = Equivalence.mapInput(
 Use `Equivalence.combine` for multi-field equality:
 
 ```typescript
+import { DateTime } from "effect"
 import * as Equivalence from "effect/Equivalence"
+
+interface Task {
+  readonly _tag: string
+  readonly id: string
+  readonly createdAt: DateTime.Utc
+}
+
+declare const EquivalenceByTag: Equivalence.Equivalence<Task>
+declare const EquivalenceById: Equivalence.Equivalence<Task>
+declare const EquivalenceByCreatedAt: Equivalence.Equivalence<Task>
 
 /**
  * Compare by tag first, then by ID.
@@ -139,19 +168,64 @@ export const EquivalenceComplete = Equivalence.combine(
 When a domain type implements a typeclass, re-export all relevant predicates:
 
 ```typescript
-import * as Schedulable$ from "@/typeclass/Schedulable"
-import * as Durable$ from "@/typeclass/Durable"
+import { DateTime, Duration, Schema } from "effect"
 import * as Order from "effect/Order"
+
+// Inline typeclass interface declarations (instead of module augmentations)
+interface SchedulableInstance<A> {
+  readonly get: (self: A) => DateTime.DateTime
+  readonly set: (self: A, date: DateTime.DateTime) => A
+}
+
+interface DurableInstance<A> {
+  readonly get: (self: A) => Duration.Duration
+  readonly set: (self: A, duration: Duration.Duration) => A
+}
+
+// Typeclass module declarations
+declare const Schedulable$: {
+  make: <A>(
+    get: (self: A) => DateTime.DateTime,
+    set: (self: A, date: DateTime.DateTime) => A
+  ) => SchedulableInstance<A>
+  isScheduledBefore: <A>(instance: SchedulableInstance<A>) => (date: DateTime.DateTime) => (self: A) => boolean
+  isScheduledAfter: <A>(instance: SchedulableInstance<A>) => (date: DateTime.DateTime) => (self: A) => boolean
+  isScheduledBetween: <A>(instance: SchedulableInstance<A>) => (start: DateTime.DateTime, end: DateTime.DateTime) => (self: A) => boolean
+  isScheduledOn: <A>(instance: SchedulableInstance<A>) => (date: DateTime.DateTime) => (self: A) => boolean
+  isScheduledToday: <A>(instance: SchedulableInstance<A>) => (self: A) => boolean
+  isScheduledThisWeek: <A>(instance: SchedulableInstance<A>) => (self: A) => boolean
+  isScheduledThisMonth: <A>(instance: SchedulableInstance<A>) => (self: A) => boolean
+}
+
+declare const Durable$: {
+  make: <A>(
+    get: (self: A) => Duration.Duration,
+    set: (self: A, duration: Duration.Duration) => A
+  ) => DurableInstance<A>
+  isMoreThan: <A>(instance: DurableInstance<A>) => (min: Duration.Duration) => (self: A) => boolean
+  isLessThan: <A>(instance: DurableInstance<A>) => (max: Duration.Duration) => (self: A) => boolean
+  isBetween: <A>(instance: DurableInstance<A>) => (min: Duration.Duration, max: Duration.Duration) => (self: A) => boolean
+  hasExactDuration: <A>(instance: DurableInstance<A>) => (duration: Duration.Duration) => (self: A) => boolean
+}
+
+interface Appointment {
+  readonly date: DateTime.Utc
+  readonly duration: Duration.Duration
+}
+
+declare const Appointment: {
+  make: (props: Partial<Appointment>) => Appointment
+}
 
 // Create typeclass instances
 export const Schedulable = Schedulable$.make<Appointment>(
-  (self) => self.date,
-  (self, date) => Appointment.make({ ...self, date: DateTime.toUtc(date) })
+  (self: Appointment) => self.date,
+  (self: Appointment, date: DateTime.DateTime) => Appointment.make({ ...self, date: DateTime.toUtc(date) })
 )
 
 export const Durable = Durable$.make<Appointment>(
-  (self) => self.duration,
-  (self, duration) => Appointment.make({ ...self, duration: Duration.decode(duration) })
+  (self: Appointment) => self.duration,
+  (self: Appointment, duration: Duration.Duration) => Appointment.make({ ...self, duration: Duration.decode(duration) })
 )
 
 // Re-export all Schedulable predicates
@@ -175,9 +249,15 @@ export const hasExactDuration = Durable$.hasExactDuration(Durable)
 Compose orders from simpler base orders using `Order.mapInput`:
 
 ```typescript
+import { DateTime } from "effect"
 import * as Order from "effect/Order"
-import * as DateTime from "effect/DateTime"
 import * as String from "effect/String"
+
+interface Task {
+  readonly _tag: "pending" | "active" | "completed"
+  readonly id: string
+  readonly createdAt: DateTime.Utc
+}
 
 /**
  * Order by ID using Order.mapInput.
@@ -191,7 +271,7 @@ import * as String from "effect/String"
  * const sorted = Array.sort(tasks, Task.OrderById)
  */
 export const OrderById: Order.Order<Task> =
-  Order.mapInput(Order.string, (task) => task.id)
+  Order.mapInput(Order.string, (task: Task) => task.id)
 
 /**
  * Order by creation date.
@@ -200,7 +280,7 @@ export const OrderById: Order.Order<Task> =
  * @since 0.1.0
  */
 export const OrderByCreatedAt: Order.Order<Task> =
-  Order.mapInput(DateTime.Order, (task) => task.createdAt)
+  Order.mapInput(DateTime.Order, (task: Task) => task.createdAt)
 
 /**
  * Order by status tag.
@@ -209,7 +289,7 @@ export const OrderByCreatedAt: Order.Order<Task> =
  * @since 0.1.0
  */
 export const OrderByTag: Order.Order<Task> =
-  Order.mapInput(Order.string, (task) => task._tag)
+  Order.mapInput(Order.string, (task: Task) => task._tag)
 
 /**
  * Order by priority (domain-specific logic).
@@ -218,7 +298,7 @@ export const OrderByTag: Order.Order<Task> =
  * @since 0.1.0
  */
 export const OrderByPriority: Order.Order<Task> =
-  Order.mapInput(Order.number, (task) => {
+  Order.mapInput(Order.number, (task: Task) => {
     const priorities = { pending: 0, active: 1, completed: 2 }
     return priorities[task._tag]
   })
@@ -235,7 +315,19 @@ export const OrderByPriority: Order.Order<Task> =
 Use `Order.combine` for multi-criteria sorting:
 
 ```typescript
+import { DateTime } from "effect"
 import * as Order from "effect/Order"
+
+interface Task {
+  readonly _tag: "pending" | "active" | "completed"
+  readonly id: string
+  readonly createdAt: DateTime.Utc
+}
+
+declare const OrderByPriority: Order.Order<Task>
+declare const OrderByCreatedAt: Order.Order<Task>
+declare const OrderByTag: Order.Order<Task>
+declare const OrderById: Order.Order<Task>
 
 /**
  * Sort by priority first, then by creation date.
@@ -278,6 +370,54 @@ export const OrderComplex: Order.Order<Task> = Order.combine(
 Provide extensive sorting capabilities:
 
 ```typescript
+import { DateTime, Duration } from "effect"
+import * as Order from "effect/Order"
+import * as String from "effect/String"
+
+// Inline typeclass interface declarations
+interface SchedulableInstance<A> {
+  readonly get: (self: A) => DateTime.DateTime
+  readonly set: (self: A, date: DateTime.DateTime) => A
+}
+
+interface DurableInstance<A> {
+  readonly get: (self: A) => Duration.Duration
+  readonly set: (self: A, duration: Duration.Duration) => A
+}
+
+// Typeclass module declarations
+declare const Schedulable$: {
+  OrderByScheduledTime: <A>(instance: SchedulableInstance<A>) => Order.Order<A>
+  OrderByDayOfWeek: <A>(instance: SchedulableInstance<A>) => Order.Order<A>
+  OrderByTimeOfDay: <A>(instance: SchedulableInstance<A>) => Order.Order<A>
+  OrderByHour: <A>(instance: SchedulableInstance<A>) => Order.Order<A>
+  OrderByMonth: <A>(instance: SchedulableInstance<A>) => Order.Order<A>
+  OrderByYear: <A>(instance: SchedulableInstance<A>) => Order.Order<A>
+  OrderByYearMonth: <A>(instance: SchedulableInstance<A>) => Order.Order<A>
+  OrderByDateOnly: <A>(instance: SchedulableInstance<A>) => Order.Order<A>
+  OrderByDayPeriod: <A>(instance: SchedulableInstance<A>) => Order.Order<A>
+  OrderByBusinessHours: <A>(instance: SchedulableInstance<A>) => Order.Order<A>
+  OrderByWeekdayFirst: <A>(instance: SchedulableInstance<A>) => Order.Order<A>
+}
+
+declare const Durable$: {
+  OrderByDuration: <A>(instance: DurableInstance<A>) => Order.Order<A>
+  OrderByHours: <A>(instance: DurableInstance<A>) => Order.Order<A>
+  OrderByMinutes: <A>(instance: DurableInstance<A>) => Order.Order<A>
+  OrderBySeconds: <A>(instance: DurableInstance<A>) => Order.Order<A>
+}
+
+type AppointmentStatus = "scheduled" | "confirmed" | "completed" | "cancelled"
+
+interface Appointment {
+  readonly date: DateTime.Utc
+  readonly duration: Duration.Duration
+  readonly status: AppointmentStatus
+}
+
+declare const Schedulable: SchedulableInstance<Appointment>
+declare const Durable: DurableInstance<Appointment>
+
 // Schedulable orders (temporal sorting)
 export const OrderByScheduledTime = Schedulable$.OrderByScheduledTime(Schedulable)
 export const OrderByDayOfWeek = Schedulable$.OrderByDayOfWeek(Schedulable)
@@ -299,10 +439,10 @@ export const OrderBySeconds = Durable$.OrderBySeconds(Durable)
 
 // Domain-specific orders using Order.mapInput
 export const OrderByStatus: Order.Order<Appointment> =
-  Order.mapInput(String.Order, (appt) => appt.status)
+  Order.mapInput(String.Order, (appt: Appointment) => appt.status)
 
 export const OrderByStatusPriority: Order.Order<Appointment> =
-  Order.mapInput(Order.number, (appt) => {
+  Order.mapInput(Order.number, (appt: Appointment) => {
     const priorities: Record<AppointmentStatus, number> = {
       scheduled: 0,
       confirmed: 1,
@@ -324,9 +464,24 @@ export const OrderByStatusThenTime: Order.Order<Appointment> = Order.combine(
 ### Equality Examples
 
 ```typescript
-import { Equal } from "effect"
+import { Equal, Array } from "effect"
+import * as Equivalence from "effect/Equivalence"
+
+declare module "@/schemas/Task" {
+  export interface Task {
+    readonly _tag: string
+    readonly id: string
+  }
+  export const EquivalenceById: Equivalence.Equivalence<Task>
+  export const EquivalenceByTagAndId: Equivalence.Equivalence<Task>
+}
+
 import * as Task from "@/schemas/Task"
-import * as Array from "effect/Array"
+
+declare const task1: Task.Task
+declare const task2: Task.Task
+declare const tasks: Array<Task.Task>
+declare const searchTask: Task.Task
 
 // Structural equality (automatic from Schema.Data)
 const areSame = Equal.equals(task1, task2)
@@ -346,6 +501,20 @@ const hasTask = Array.containsWith(tasks, Task.EquivalenceById)(searchTask)
 Document how these predicates enable powerful filtering:
 
 ```typescript
+import { DateTime, Duration, Array } from "effect"
+import { pipe } from "effect/Function"
+
+declare module "@/schemas/Appointment" {
+  export interface Appointment {
+    readonly date: DateTime.Utc
+  }
+  export const isScheduledBefore: (date: DateTime.DateTime) => (appointment: Appointment) => boolean
+}
+
+import * as Appointment from "@/schemas/Appointment"
+
+declare const appointments: Array<Appointment.Appointment>
+
 /**
  * Filter appointments scheduled before a date.
  *
@@ -366,14 +535,39 @@ Document how these predicates enable powerful filtering:
  *   Array.filter(Appointment.isScheduledBefore(tomorrow))
  * )
  */
+const tomorrow = DateTime.addDuration(
+  DateTime.unsafeNow(),
+  Duration.days(1)
+)
+
+const beforeTomorrow = pipe(
+  appointments,
+  Array.filter(Appointment.isScheduledBefore(tomorrow))
+)
 ```
 
 ### Sorting Examples
 
 ```typescript
-import * as Array from "effect/Array"
+import { Array, DateTime } from "effect"
 import * as Order from "effect/Order"
 import { pipe } from "effect/Function"
+
+declare module "@/schemas/Task" {
+  export interface Task {
+    readonly _tag: "pending" | "active" | "completed"
+    readonly id: string
+    readonly createdAt: DateTime.Utc
+  }
+  export const OrderById: Order.Order<Task>
+  export const OrderByPriority: Order.Order<Task>
+  export const OrderByCreatedAt: Order.Order<Task>
+  export const isPending: (task: Task) => boolean
+}
+
+import * as Task from "@/schemas/Task"
+
+declare const tasks: Array<Task.Task>
 
 // Simple sort by single field
 const sortedById = Array.sort(tasks, Task.OrderById)
@@ -400,8 +594,30 @@ const sortedFiltered = pipe(
 Combine predicates for sophisticated queries:
 
 ```typescript
+import { DateTime, Duration, Array } from "effect"
 import { pipe } from "effect/Function"
-import * as Array from "effect/Array"
+import * as Order from "effect/Order"
+import * as Equivalence from "effect/Equivalence"
+
+declare module "@/schemas/Appointment" {
+  export interface Appointment {
+    readonly id: string
+    readonly date: DateTime.Utc
+    readonly duration: Duration.Duration
+    readonly status: string
+  }
+  export const isScheduledThisWeek: (appointment: Appointment) => boolean
+  export const hasMinimumDuration: (min: Duration.Duration) => (appointment: Appointment) => boolean
+  export const isScheduledToday: (appointment: Appointment) => boolean
+  export const OrderByStatusPriority: Order.Order<Appointment>
+  export const OrderByScheduledTime: Order.Order<Appointment>
+  export const EquivalenceById: Equivalence.Equivalence<Appointment>
+  export const OrderByPriorityThenDate: Order.Order<Appointment>
+}
+
+import * as Appointment from "@/schemas/Appointment"
+
+declare const appointments: Array<Appointment.Appointment>
 
 // Find long appointments this week
 const longThisWeek = pipe(
@@ -478,34 +694,83 @@ Every predicate, equivalence, and order MUST have:
 
 **1. Schema.Data for Equality**
 ```typescript
-Schema.TaggedStruct("task", { id: Schema.String }).pipe(Schema.Data)
+import { Schema, Equal } from "effect"
+
+const TaskSchema = Schema.TaggedStruct("task", { id: Schema.String }).pipe(Schema.Data)
+type Task = Schema.Schema.Type<typeof TaskSchema>
+
+declare const t1: Task
+declare const t2: Task
+
 // Usage: Equal.equals(t1, t2)
+const areSame = Equal.equals(t1, t2)
 ```
 
 **2. Schema.equivalence() for Combinators**
 ```typescript
+import { Schema, Array } from "effect"
+
+declare const Task: Schema.Schema<any, any, never>
+type Task = Schema.Schema.Type<typeof Task>
+
 export const Equivalence = Schema.equivalence(Task)
+
+declare const tasks: Array<Task>
+
 // Usage: Array.dedupeWith(tasks, Equivalence)
+const uniqueTasks = Array.dedupeWith(tasks, Equivalence)
 ```
 
 **3. Equivalence.mapInput for Field-Based**
 ```typescript
-Equivalence.mapInput(Equivalence.string, (t: Task) => t.id)
+import * as Equivalence from "effect/Equivalence"
+
+interface Task {
+  readonly id: string
+}
+
+const EquivalenceById = Equivalence.mapInput(Equivalence.string, (t: Task) => t.id)
 ```
 
 **4. Equivalence.combine for Multi-Field**
 ```typescript
-Equivalence.combine(EquivalenceByTag, EquivalenceById)
+import * as Equivalence from "effect/Equivalence"
+
+interface Task {
+  readonly _tag: string
+  readonly id: string
+}
+
+declare const EquivalenceByTag: Equivalence.Equivalence<Task>
+declare const EquivalenceById: Equivalence.Equivalence<Task>
+
+const EquivalenceCombined = Equivalence.combine(EquivalenceByTag, EquivalenceById)
 ```
 
 **5. Order.mapInput for Field-Based Sorting**
 ```typescript
-Order.mapInput(Order.string, (t: Task) => t.id)
+import * as Order from "effect/Order"
+
+interface Task {
+  readonly id: string
+}
+
+const OrderById = Order.mapInput(Order.string, (t: Task) => t.id)
 ```
 
 **6. Order.combine for Multi-Criteria Sorting**
 ```typescript
-Order.combine(OrderByPriority, OrderByDate)
+import * as Order from "effect/Order"
+
+interface Task {
+  readonly priority: number
+  readonly date: Date
+}
+
+declare const OrderByPriority: Order.Order<Task>
+declare const OrderByDate: Order.Order<Task>
+
+const OrderCombined = Order.combine(OrderByPriority, OrderByDate)
 ```
 
 This ensures comprehensive equality checking, predicates, and sorting capabilities are discoverable and developers understand how to use them effectively with Effect's compositional patterns.

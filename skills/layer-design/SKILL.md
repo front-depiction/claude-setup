@@ -10,6 +10,8 @@ Create layers that construct services while managing their dependencies cleanly.
 ## Layer Structure
 
 ```typescript
+import { Layer } from "effect"
+
 // Layer<RequirementsOut, Error, RequirementsIn>
 //          ▲                ▲           ▲
 //          │                │           └─ What this layer needs
@@ -20,6 +22,13 @@ Create layers that construct services while managing their dependencies cleanly.
 ## Pattern: Simple Layer (No Dependencies)
 
 ```typescript
+import { Context, Effect, Layer } from "effect"
+
+interface ConfigData {
+  readonly logLevel: string
+  readonly connection: string
+}
+
 export class Config extends Context.Tag("Config")<
   Config,
   {
@@ -46,6 +55,20 @@ export const ConfigLive = Layer.succeed(
 ## Pattern: Layer with Dependencies
 
 ```typescript
+import { Context, Effect, Layer, Console } from "effect"
+
+interface ConfigData {
+  readonly logLevel: string
+  readonly connection: string
+}
+
+export class Config extends Context.Tag("Config")<
+  Config,
+  {
+    readonly getConfig: Effect.Effect<ConfigData>
+  }
+>() {}
+
 export class Logger extends Context.Tag("Logger")<
   Logger,
   { readonly log: (message: string) => Effect.Effect<void> }
@@ -81,15 +104,48 @@ Use `Layer.scoped` when resources need cleanup:
 Use `Layer.effect` for stateless services without cleanup needs.
 
 ```typescript
+import { Context, Effect, Layer } from "effect"
+
+interface ConfigData {
+  readonly logLevel: string
+  readonly connection: string
+}
+
+interface Connection {
+  readonly close: () => void
+}
+
+interface DatabaseError {
+  readonly _tag: "DatabaseError"
+}
+
+export class Config extends Context.Tag("Config")<
+  Config,
+  {
+    readonly getConfig: Effect.Effect<ConfigData>
+  }
+>() {}
+
+export class Database extends Context.Tag("Database")<
+  Database,
+  {
+    readonly query: (sql: string) => Effect.Effect<unknown, DatabaseError>
+  }
+>() {}
+
+declare const connectToDatabase: (config: ConfigData) => Effect.Effect<Connection, DatabaseError>
+declare const executeQuery: (connection: Connection, sql: string) => Effect.Effect<unknown, DatabaseError>
+
 // Layer<Database, DatabaseError, Config>
 export const DatabaseLive = Layer.scoped(
   Database,
   Effect.gen(function* () {
     const config = yield* Config
+    const configData = yield* config.getConfig
 
     // Acquire resource with automatic release
     const connection = yield* Effect.acquireRelease(
-      connectToDatabase(config),
+      connectToDatabase(configData),
       (conn) => Effect.sync(() => conn.close())  // Cleanup
     )
 
@@ -107,6 +163,14 @@ export const DatabaseLive = Layer.scoped(
 Combine independent layers:
 
 ```typescript
+import { Context, Layer } from "effect"
+
+declare class Config extends Context.Tag("Config")<Config, {}> {}
+declare class Logger extends Context.Tag("Logger")<Logger, {}> {}
+
+declare const ConfigLive: Layer.Layer<Config, never, never>
+declare const LoggerLive: Layer.Layer<Logger, never, Config>
+
 // Layer<Config | Logger, never, Config>
 //         ▲               ▲      ▲
 //         │               │      └─ LoggerLive needs Config
@@ -124,6 +188,14 @@ Result combines:
 Chain dependent layers:
 
 ```typescript
+import { Context, Layer } from "effect"
+
+declare class Config extends Context.Tag("Config")<Config, {}> {}
+declare class Logger extends Context.Tag("Logger")<Logger, {}> {}
+
+declare const ConfigLive: Layer.Layer<Config, never, never>
+declare const LoggerLive: Layer.Layer<Logger, never, Config>
+
 // Layer<Logger, never, never>
 //         ▲      ▲      ▲
 //         │      │      └─ ConfigLive satisfies LoggerLive's requirement
@@ -141,6 +213,24 @@ Result:
 Build applications in layers:
 
 ```typescript
+import { Context, Layer } from "effect"
+
+declare class Config extends Context.Tag("Config")<Config, {}> {}
+declare class Database extends Context.Tag("Database")<Database, {}> {}
+declare class Cache extends Context.Tag("Cache")<Cache, {}> {}
+declare class PaymentDomain extends Context.Tag("PaymentDomain")<PaymentDomain, {}> {}
+declare class OrderDomain extends Context.Tag("OrderDomain")<OrderDomain, {}> {}
+declare class PaymentGateway extends Context.Tag("PaymentGateway")<PaymentGateway, {}> {}
+declare class NotificationService extends Context.Tag("NotificationService")<NotificationService, {}> {}
+
+declare const ConfigLive: Layer.Layer<Config, never, never>
+declare const DatabaseLive: Layer.Layer<Database, never, Config>
+declare const CacheLive: Layer.Layer<Cache, never, Config>
+declare const PaymentDomainLive: Layer.Layer<PaymentDomain, never, Database>
+declare const OrderDomainLive: Layer.Layer<OrderDomain, never, Database>
+declare const PaymentGatewayLive: Layer.Layer<PaymentGateway, never, PaymentDomain>
+declare const NotificationServiceLive: Layer.Layer<NotificationService, never, OrderDomain>
+
 // Infrastructure: No dependencies
 const InfrastructureLive = Layer.mergeAll(
   ConfigLive,          // Layer<Config, never, never>
@@ -172,6 +262,26 @@ const ApplicationLive = Layer.mergeAll(
 Switch implementations for different environments:
 
 ```typescript
+import { Context, Effect, Layer } from "effect"
+
+interface Connection {
+  readonly close: () => void
+}
+
+export class Database extends Context.Tag("Database")<
+  Database,
+  {
+    readonly query: (sql: string) => Effect.Effect<{ rows: unknown[] }>
+  }
+>() {}
+
+declare const connectToProduction: () => Effect.Effect<Connection>
+declare const createDatabaseService: (connection: Connection) => {
+  readonly query: (sql: string) => Effect.Effect<{ rows: unknown[] }>
+}
+
+declare const myProgram: Effect.Effect<void, never, Database>
+
 // Production
 export const DatabaseLive = Layer.scoped(
   Database,
@@ -200,6 +310,11 @@ const program = myProgram.pipe(
 Layers are memoized - same instance shared across program:
 
 ```typescript
+import { Context, Effect, Layer } from "effect"
+
+declare class Config extends Context.Tag("Config")<Config, { readonly value: string }> {}
+declare const ConfigLive: Layer.Layer<Config, never, never>
+
 // Config is constructed once and shared
 const program = Effect.all([
   Effect.gen(function* () {
@@ -218,6 +333,32 @@ const program = Effect.all([
 Handle construction errors:
 
 ```typescript
+import { Context, Effect, Layer, Data } from "effect"
+
+interface Connection {
+  readonly close: () => void
+}
+
+class ConnectionError extends Data.TaggedError("ConnectionError")<{
+  readonly message: string
+}> {}
+
+class DatabaseConstructionError extends Data.TaggedError("DatabaseConstructionError")<{
+  readonly cause: ConnectionError
+}> {}
+
+export class Database extends Context.Tag("Database")<
+  Database,
+  {
+    readonly query: (sql: string) => Effect.Effect<unknown>
+  }
+>() {}
+
+declare const connectToDatabase: () => Effect.Effect<Connection, ConnectionError>
+declare const createDatabaseService: (connection: Connection) => {
+  readonly query: (sql: string) => Effect.Effect<unknown>
+}
+
 export const DatabaseLive = Layer.effect(
   Database,
   Effect.gen(function* () {

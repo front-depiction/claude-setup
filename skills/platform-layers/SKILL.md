@@ -9,6 +9,7 @@ Master Effect platform layer provision for cross-platform applications. Use this
 ```typescript
 // Application code - platform agnostic
 import { FileSystem, Path } from "@effect/platform"
+import { Effect, pipe } from "effect"
 
 const readConfig = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
@@ -19,6 +20,8 @@ const readConfig = Effect.gen(function* () {
 
 // Entry point - platform specific
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
+
+declare const program: Effect.Effect<void, never, never>
 
 pipe(
   program,
@@ -39,6 +42,9 @@ import { FileSystem } from "@effect/platform-node"  // Platform-specific
 
 ```typescript
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
+import { Effect, pipe } from "effect"
+
+declare const program: Effect.Effect<void, never, never>
 
 pipe(
   program,
@@ -51,6 +57,9 @@ pipe(
 
 ```typescript
 import { BunContext, BunRuntime } from "@effect/platform-bun"
+import { Effect, pipe } from "effect"
+
+declare const program: Effect.Effect<void, never, never>
 
 pipe(
   program,
@@ -63,6 +72,9 @@ pipe(
 
 ```typescript
 import { BrowserContext, BrowserRuntime } from "@effect/platform-browser"
+import { Effect, pipe } from "effect"
+
+declare const program: Effect.Effect<void, never, never>
 
 pipe(
   program,
@@ -86,6 +98,7 @@ Each platform context (`NodeContext.layer`, `BunContext.layer`, etc.) provides t
 
 ```typescript
 import { FileSystem, Path, Terminal, CommandExecutor } from "@effect/platform"
+import { Effect } from "effect"
 
 const buildProject = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
@@ -114,6 +127,9 @@ const buildProject = Effect.gen(function* () {
 
 ```typescript
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
+import { Effect, pipe } from "effect"
+
+declare const program: Effect.Effect<void, never, never>
 
 // Single platform context provides all services
 pipe(
@@ -127,6 +143,12 @@ pipe(
 
 ```typescript
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
+import { Effect, Layer, pipe } from "effect"
+
+declare const DatabaseLive: Layer.Layer<never, never, never>
+declare const ConfigServiceLive: Layer.Layer<never, never, never>
+declare const LoggerLive: Layer.Layer<never, never, never>
+declare const program: Effect.Effect<void, never, never>
 
 const AppLayer = Layer.mergeAll(
   DatabaseLive,
@@ -147,6 +169,9 @@ pipe(
 ```typescript
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
 import { FileSystem } from "@effect/platform"
+import { Effect, Layer, pipe } from "effect"
+
+declare const program: Effect.Effect<void, never, never>
 
 // Custom FileSystem implementation
 const CustomFS = Layer.succeed(FileSystem.FileSystem, {
@@ -169,7 +194,10 @@ pipe(
 
 ```typescript
 import { FileSystem } from "@effect/platform"
-import { Layer } from "effect"
+import { Effect, Layer } from "effect"
+import { expect, test } from "vitest"
+
+declare const readConfig: Effect.Effect<string, never, FileSystem.FileSystem>
 
 const MockFileSystem = Layer.succeed(
   FileSystem.FileSystem,
@@ -197,6 +225,10 @@ test("should read config", () =>
 
 ```typescript
 import { FileSystem, Path, Terminal } from "@effect/platform"
+import { Effect, Layer } from "effect"
+import { test } from "vitest"
+
+declare const program: Effect.Effect<void, never, FileSystem.FileSystem | Path.Path | Terminal.Terminal>
 
 const TestContext = Layer.mergeAll(
   Layer.succeed(FileSystem.FileSystem, {
@@ -229,7 +261,8 @@ test("integration test", () =>
 
 ```typescript
 import { FileSystem, Path } from "@effect/platform"
-import { TestContext } from "effect"
+import { Effect, TestContext } from "effect"
+import { test } from "vitest"
 
 test("with TestContext", () =>
   Effect.gen(function* () {
@@ -262,7 +295,18 @@ src/
 ```typescript
 // services/ConfigService.ts
 import { FileSystem, Path } from "@effect/platform"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
+
+interface Config {
+  readonly name: string
+  readonly version: string
+}
+
+declare const ConfigSchema: Schema.Schema<Config>
+
+class ConfigError extends Schema.TaggedError<ConfigError>()("ConfigError", {
+  message: Schema.String
+}) {}
 
 export class ConfigService extends Context.Tag("ConfigService")<
   ConfigService,
@@ -301,8 +345,8 @@ export const ConfigServiceLive = Layer.effect(
 ```typescript
 // main/main.ts
 import { NodeContext, NodeRuntime } from "@effect/platform-node"
-import { Effect, Layer } from "effect"
-import { ConfigServiceLive } from "../services/ConfigService.js"
+import { Effect, Layer, pipe } from "effect"
+import { ConfigService, ConfigServiceLive } from "../services/ConfigService.js"
 
 const MainLayer = Layer.mergeAll(
   ConfigServiceLive,
@@ -328,6 +372,12 @@ pipe(
 ### Conditional Platform Loading
 
 ```typescript
+import { NodeContext, NodeRuntime } from "@effect/platform-node"
+import { BunContext } from "@effect/platform-bun"
+import { Effect, pipe } from "effect"
+
+declare const program: Effect.Effect<void, never, never>
+
 const PlatformContext =
   process.env.RUNTIME === "bun"
     ? BunContext.layer
@@ -343,6 +393,9 @@ pipe(
 ### Scoped Platform Resources
 
 ```typescript
+import { FileSystem, Path } from "@effect/platform"
+import { Effect } from "effect"
+
 const withTempDirectory = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
@@ -380,6 +433,7 @@ const readConfig = () => {
 ```typescript
 // WRONG - bypasses Effect abstractions
 import { FileSystem } from "@effect/platform-node"
+import { Effect } from "effect"
 
 const program = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
@@ -392,6 +446,9 @@ const program = Effect.gen(function* () {
 ```typescript
 // WRONG - application code should not know about platform
 import { NodeContext } from "@effect/platform-node"
+import { Effect } from "effect"
+
+declare const program: Effect.Effect<void, never, never>
 
 export const myService = program.pipe(
   Effect.provide(NodeContext.layer)  // Should be at entry point only

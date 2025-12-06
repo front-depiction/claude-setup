@@ -13,6 +13,9 @@ import { Command, Args, Options } from "@effect/cli"
 Use `Command.make` to create commands with typed arguments and options:
 
 ```typescript
+import { Command, Args, Options } from "@effect/cli"
+import { Console } from "effect"
+
 const command = Command.make(
   "greet",
   {
@@ -32,6 +35,8 @@ Arguments are **required by default** and parsed in order.
 ### Basic Types
 
 ```typescript
+import { Args } from "@effect/cli"
+
 Args.text({ name: "username" })        // string
 Args.integer({ name: "count" })        // number (integer)
 Args.float({ name: "amount" })         // number (float)
@@ -42,6 +47,8 @@ Args.date({ name: "deadline" })        // Date
 ### File System Arguments
 
 ```typescript
+import { Args } from "@effect/cli"
+
 Args.file({ name: "input" })           // path to existing file
 Args.directory({ name: "output" })     // path to existing directory
 ```
@@ -49,6 +56,8 @@ Args.directory({ name: "output" })     // path to existing directory
 ### Choice Arguments
 
 ```typescript
+import { Args } from "@effect/cli"
+
 Args.choice({ name: "env" }, ["dev", "staging", "prod"])
 ```
 
@@ -57,6 +66,8 @@ Args.choice({ name: "env" }, ["dev", "staging", "prod"])
 Chain these on any Args type:
 
 ```typescript
+import { Args } from "@effect/cli"
+
 // Make optional (returns Option<T>)
 Args.text({ name: "config" }).pipe(Args.optional)
 
@@ -84,6 +95,8 @@ Options are **named flags** with `--name` or `-alias` syntax.
 ### Basic Types
 
 ```typescript
+import { Options } from "@effect/cli"
+
 Options.boolean("verbose")             // --verbose
 Options.text("config")                 // --config=value
 Options.integer("port")                // --port=8080
@@ -94,6 +107,8 @@ Options.date("since")                  // --since=2024-01-01
 ### Advanced Options
 
 ```typescript
+import { Options } from "@effect/cli"
+
 // File system options
 Options.file("input")                  // --input=file.txt
 Options.directory("output")            // --output=./dist
@@ -108,6 +123,8 @@ Options.keyValueMap("header")          // --header key=value
 ### Option Combinators
 
 ```typescript
+import { Options } from "@effect/cli"
+
 // Short alias
 Options.boolean("verbose").pipe(Options.withAlias("v"))
 // Usage: --verbose or -v
@@ -141,6 +158,9 @@ mycli file1.txt --verbose file2.txt --port=8080
 Create command hierarchies with `Command.withSubcommands`:
 
 ```typescript
+import { Command, Args } from "@effect/cli"
+import { Console } from "effect"
+
 const init = Command.make("init", {}, () =>
   Console.log("Initializing...")
 )
@@ -163,6 +183,9 @@ const app = Command.make("app", {}).pipe(
 Use `yield*` to access parent command context:
 
 ```typescript
+import { Command, Options } from "@effect/cli"
+import { Console, Effect } from "effect"
+
 const parent = Command.make("parent", {
   verbose: Options.boolean("verbose")
 }, () => Effect.void)
@@ -182,6 +205,12 @@ Provide services to command handlers via Effect's dependency injection:
 ### Layer Provision
 
 ```typescript
+import { Command, Args } from "@effect/cli"
+import { Effect, Context, Layer } from "effect"
+
+declare const HttpClient: Context.Tag<unknown, { get: (url: string) => Effect.Effect<unknown> }>
+declare const HttpClientLive: Layer.Layer<unknown>
+
 const command = Command.make("fetch", {
   url: Args.text({ name: "url" })
 }, ({ url }) =>
@@ -197,6 +226,12 @@ const command = Command.make("fetch", {
 ### Effect Provision
 
 ```typescript
+import { Command } from "@effect/cli"
+import { Effect, Context } from "effect"
+
+declare const DatabaseService: Context.Tag<unknown, unknown>
+declare const makeDatabaseService: () => unknown
+
 Command.provideEffect(DatabaseService,
   Effect.succeed(makeDatabaseService())
 )
@@ -205,6 +240,12 @@ Command.provideEffect(DatabaseService,
 ### Sync Provision
 
 ```typescript
+import { Command } from "@effect/cli"
+import { Context } from "effect"
+
+declare const ConfigService: Context.Tag<unknown, unknown>
+declare const makeConfigService: () => unknown
+
 Command.provideSync(ConfigService, makeConfigService())
 ```
 
@@ -213,6 +254,11 @@ Command.provideSync(ConfigService, makeConfigService())
 Execute with `Command.run` and app metadata:
 
 ```typescript
+import { Command } from "@effect/cli"
+import { Effect } from "effect"
+
+declare const command: Command.Command<unknown>
+
 const main = Command.run(command, {
   name: "myapp",
   version: "1.0.0"
@@ -228,6 +274,8 @@ Auto-generates help text and handles `--help`, `--version` flags.
 ```typescript
 import { Command, Args, Options } from "@effect/cli"
 import { Effect, Console } from "effect"
+
+declare const performDeployment: (env: string, services: Array<string>) => Effect.Effect<void>
 
 const deploy = Command.make(
   "deploy",

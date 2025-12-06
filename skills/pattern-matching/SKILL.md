@@ -108,7 +108,10 @@ Use `Effect.match` instead of `Effect.either` with manual tag checks.
 
 ```typescript
 // ❌ WRONG - Effect.either with manual _tag checks
-import { Effect, Either } from "effect"
+import { Effect, Either, Data } from "effect"
+
+declare const User: { name: string; id: string }
+type User = typeof User
 
 class NotFound extends Data.TaggedError("NotFound")<{
   readonly id: string
@@ -139,7 +142,10 @@ const program = Effect.gen(function* () {
 
 ```typescript
 // ✅ CORRECT - Effect.match for declarative error handling
-import { Effect } from "effect"
+import { Effect, Data } from "effect"
+
+declare const User: { name: string; id: string }
+type User = typeof User
 
 class NotFound extends Data.TaggedError("NotFound")<{
   readonly id: string
@@ -167,6 +173,13 @@ const program = getUser("123").pipe(
 ### Effect.match Variants
 
 ```typescript
+import { Effect, Cause } from "effect"
+
+declare const effect: Effect.Effect<unknown, unknown, unknown>
+declare function handleError(error: unknown): unknown
+declare function handleSuccess(value: unknown): unknown
+declare function handleCause(cause: Cause.Cause<unknown>): unknown
+
 // Basic match - transform both success and failure
 Effect.match(effect, {
   onFailure: (error) => handleError(error),
@@ -187,7 +200,7 @@ Effect.matchCause(effect, {
 
 // matchCauseEffect - Cause matching with Effect handlers
 Effect.matchCauseEffect(effect, {
-  onFailure: (cause) => Effect.logError(cause).pipe(Effect.succeed(null)),
+  onFailure: (cause) => Effect.logError(cause).pipe(Effect.as(null)),
   onSuccess: (value) => Effect.succeed(value)
 })
 ```
@@ -200,6 +213,8 @@ Use `TaggedEnum.$match` for exhaustive, type-safe pattern matching.
 
 ```typescript
 // ❌ WRONG - if/else chains, not exhaustive
+import { Data } from "effect"
+
 type Status = Data.TaggedEnum<{
   Active: {}
   Expired: {}
@@ -228,6 +243,15 @@ const getColor = (status: Status): string => {
 
 ```typescript
 // ✅ CORRECT - $match with exhaustive checking
+import { Data } from "effect"
+
+type Status = Data.TaggedEnum<{
+  Active: {}
+  Expired: {}
+  Revoked: {}
+}>
+const Status = Data.taggedEnum<Status>()
+
 const getColor = (status: Status): string =>
   Status.$match(status, {
     Active: () => "green",
@@ -306,6 +330,8 @@ Use `TaggedEnum.$is` instead of manual `_tag` checks.
 
 ```typescript
 // ❌ WRONG - Manual tag checking
+import { Data } from "effect"
+
 type Status = Data.TaggedEnum<{
   Active: {}
   Expired: {}
@@ -327,6 +353,14 @@ const activeItems = items.filter(item => item._tag === "Active")
 
 ```typescript
 // ✅ CORRECT - $is for type-safe guards
+import { Data, Array, pipe } from "effect"
+
+type Status = Data.TaggedEnum<{
+  Active: {}
+  Expired: {}
+}>
+const Status = Data.taggedEnum<Status>()
+
 const status = Status.Active()
 
 // Clean, declarative guard
@@ -353,6 +387,8 @@ const activeOrExpired = items.filter(
 ### $is in Effect Pipelines
 
 ```typescript
+import { Data, pipe } from "effect"
+
 type LoadState = Data.TaggedEnum<{
   Loading: {}
   Ready: { readonly data: string[] }
@@ -380,6 +416,8 @@ Use `Option.match` instead of manual `._tag` checks on Options.
 // ❌ WRONG - Manual Option._tag checks
 import { Option } from "effect"
 
+type User = { name: string; id: string }
+
 const maybeUser: Option.Option<User> = Option.some({ name: "Alice", id: "123" })
 
 // Imperative and verbose
@@ -394,7 +432,9 @@ if (maybeUser._tag === "Some") {
 
 ```typescript
 // ✅ CORRECT - Option.match
-import { Option } from "effect"
+import { Option, pipe } from "effect"
+
+type User = { name: string; id: string }
 
 const maybeUser: Option.Option<User> = Option.some({ name: "Alice", id: "123" })
 
@@ -416,7 +456,12 @@ const name = pipe(
 ### Option Pattern Matching Variants
 
 ```typescript
-import { Option } from "effect"
+import { Option, pipe } from "effect"
+
+declare const option: Option.Option<string>
+declare const defaultValue: string
+declare function transform(value: string): string
+declare function predicate(value: string): boolean
 
 // Basic match
 Option.match(option, {
@@ -474,10 +519,11 @@ const getPermissions = Match.typeTags<User>()({
   Customer: ({ tier }) => tier === "premium" ? ["read"] : []
 })
 
-const user: User = Schema.decodeSync(Admin)({
+const user: User = {
+  _tag: "Admin" as const,
   id: "1",
   permissions: ["read", "write"]
-})
+}
 
 const perms = getPermissions(user) // ["read", "write"]
 ```
@@ -485,6 +531,17 @@ const perms = getPermissions(user) // ["read", "write"]
 ### Match.typeTags Pattern
 
 ```typescript
+import { Match, Data } from "effect"
+
+type UnionType = Data.TaggedEnum<{
+  VariantA: { field: string }
+  VariantB: { other: number }
+}>
+
+declare const value: UnionType
+declare function handleA(data: { field: string }): string
+declare function handleB(data: { other: number }): string
+
 // Create matcher function
 const match = Match.typeTags<UnionType>()
 
@@ -494,11 +551,12 @@ const result = match({
   VariantB: (data) => handleB(data)
 })(value)
 
-// Or apply directly
-const result = match({
+// Or create matcher and apply later
+const matcher = match({
   VariantA: (data) => handleA(data),
   VariantB: (data) => handleB(data)
-}, value)
+})
+const result2 = matcher(value)
 ```
 
 ## Pattern 7: Loadable.match for Async State
@@ -509,6 +567,12 @@ Use `Loadable.match` for async state pattern matching.
 
 ```tsx
 import { Loadable } from "@/typeclass/Loadable"
+
+type User = { name: string; id: string }
+
+declare const Spinner: () => JSX.Element
+declare const UserProfile: (props: { user: User }) => JSX.Element
+declare const ErrorDisplay: (props: { error: Error }) => JSX.Element
 
 type UserData = Loadable.Loadable<User>
 
@@ -537,6 +601,14 @@ When pattern matching involves non-deterministic operations, use Effect services
 
 ```typescript
 // ❌ WRONG - untestable
+import { Data } from "effect"
+
+type State = Data.TaggedEnum<{
+  Active: {}
+  Expired: {}
+}>
+const State = Data.taggedEnum<State>()
+
 const processState = (state: State): string =>
   State.$match(state, {
     Active: () => `Active at ${Date.now()}`,
@@ -548,7 +620,13 @@ const processState = (state: State): string =>
 
 ```typescript
 // ✅ CORRECT - testable with Clock service
-import { Clock, Effect } from "effect"
+import { Clock, Effect, Data, TestClock } from "effect"
+
+type State = Data.TaggedEnum<{
+  Active: {}
+  Expired: {}
+}>
+const State = Data.taggedEnum<State>()
 
 const processState = (state: State): Effect.Effect<string> =>
   Effect.gen(function* () {
@@ -561,8 +639,6 @@ const processState = (state: State): Effect.Effect<string> =>
   })
 
 // In tests, use TestClock for deterministic time
-import { TestClock } from "effect"
-
 const testProgram = processState(State.Active()).pipe(
   Effect.provide(TestClock.make())
 )
@@ -572,6 +648,14 @@ const testProgram = processState(State.Active()).pipe(
 
 ```typescript
 // ❌ WRONG - untestable
+import { Data } from "effect"
+
+type User = Data.TaggedEnum<{
+  Admin: {}
+  Customer: {}
+}>
+const User = Data.taggedEnum<User>()
+
 const assignColor = (user: User): string =>
   User.$match(user, {
     Admin: () => "red",
@@ -581,7 +665,7 @@ const assignColor = (user: User): string =>
 // ✅ CORRECT - testable with Random service
 import { Random, Effect } from "effect"
 
-const assignColor = (user: User): Effect.Effect<string> =>
+const assignColorTestable = (user: User): Effect.Effect<string> =>
   User.$match(user, {
     Admin: () => Effect.succeed("red"),
     Customer: () =>
@@ -685,6 +769,8 @@ Before completing pattern matching implementation:
 
 ### ADT Definition
 ```typescript
+import { Data } from "effect"
+
 type State = Data.TaggedEnum<{
   VariantA: { field: string }
   VariantB: { other: number }
@@ -694,6 +780,18 @@ const State = Data.taggedEnum<State>()
 
 ### Exhaustive Matching
 ```typescript
+import { Data } from "effect"
+
+type State = Data.TaggedEnum<{
+  VariantA: { field: string }
+  VariantB: { other: number }
+}>
+const State = Data.taggedEnum<State>()
+
+declare const state: State
+declare function handleA(field: string): void
+declare function handleB(other: number): void
+
 State.$match(state, {
   VariantA: ({ field }) => handleA(field),
   VariantB: ({ other }) => handleB(other)
@@ -702,6 +800,17 @@ State.$match(state, {
 
 ### Type Guards
 ```typescript
+import { Data } from "effect"
+
+type State = Data.TaggedEnum<{
+  VariantA: { field: string }
+  VariantB: { other: number }
+}>
+const State = Data.taggedEnum<State>()
+
+declare const state: State
+declare const items: State[]
+
 if (State.$is("VariantA")(state)) {
   // state is refined to VariantA
 }
@@ -712,6 +821,12 @@ items.filter(State.$is("VariantA"))
 
 ### Effect Matching
 ```typescript
+import { Effect } from "effect"
+
+declare const effect: Effect.Effect<unknown, unknown, unknown>
+declare function handleError(error: unknown): unknown
+declare function handleSuccess(value: unknown): unknown
+
 effect.pipe(
   Effect.match({
     onFailure: (error) => handleError(error),
@@ -722,6 +837,12 @@ effect.pipe(
 
 ### Option Matching
 ```typescript
+import { Option } from "effect"
+
+declare const option: Option.Option<string>
+declare const defaultValue: string
+declare function transform(value: string): string
+
 Option.match(option, {
   onNone: () => defaultValue,
   onSome: (value) => transform(value)

@@ -12,7 +12,11 @@ Use this skill when implementing typeclasses that provide reusable abstractions 
 All typeclass functions must be **fully curried** to enable partial application:
 
 ```typescript
-import { Function } from "effect"
+import { Duration } from "effect"
+
+declare interface Durable<A> {
+  readonly getDuration: (self: A) => Duration.Duration
+}
 
 // Create a typeclass function that takes the typeclass instance first,
 // then curries out all other parameters
@@ -30,7 +34,12 @@ export const isMoreThan =
 Provide both **data-first** (uncurried) and **data-last** (curried) variants using `Function.dual`:
 
 ```typescript
-import { Function } from "effect"
+import { Duration } from "effect"
+import * as Function from "effect/Function"
+
+declare interface Durable<A> {
+  readonly getDuration: (self: A) => Duration.Duration
+}
 
 export const isMoreThan = <A>(D: Durable<A>) =>
   Function.dual<
@@ -54,6 +63,27 @@ The dual API enables both styles:
 ```typescript
 import { pipe } from "effect/Function"
 import * as Duration from "effect/Duration"
+import * as Function from "effect/Function"
+
+declare interface Durable<A> {
+  readonly getDuration: (self: A) => Duration.Duration
+}
+
+declare const isMoreThan: <A>(D: Durable<A>) => {
+  (minimum: Duration.DurationInput): (self: A) => boolean
+  (self: A, minimum: Duration.DurationInput): boolean
+}
+
+declare interface Appointment {
+  duration: Duration.Duration
+}
+
+declare const Appointment: {
+  Durable: Durable<Appointment>
+}
+
+declare const appointment: Appointment
+declare const appointments: Appointment[]
 
 // Data-first: Direct function call
 const hasMinimum = isMoreThan(Appointment.Durable)(
@@ -62,7 +92,7 @@ const hasMinimum = isMoreThan(Appointment.Durable)(
 )
 
 // Data-last: Pipe-friendly
-const hasMinimum = pipe(
+const hasMinimum2 = pipe(
   appointment,
   isMoreThan(Appointment.Durable)(Duration.hours(1))
 )
@@ -76,7 +106,8 @@ const longAppointments = appointments.filter(
 ## Complete Typeclass Example
 
 ```typescript
-import { Function, Duration, Order } from "effect"
+import { Duration, Order } from "effect"
+import * as Function from "effect/Function"
 
 /**
  * Typeclass for types that have a duration.

@@ -23,6 +23,9 @@ const program = Effect.gen(function* () {
 ### Read File (Binary)
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const readBinary = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const bytes = yield* fs.readFile("data.bin")
@@ -33,6 +36,9 @@ const readBinary = Effect.gen(function* () {
 ### Read File (String)
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const readText = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const content = yield* fs.readFileString("config.json")
@@ -43,7 +49,8 @@ const readText = Effect.gen(function* () {
 ### Stream File
 
 ```typescript
-import { Stream } from "effect"
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
 
 const streamFile = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
@@ -55,6 +62,9 @@ const streamFile = Effect.gen(function* () {
 ### Read Directory
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const listFiles = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const entries = yield* fs.readDirectory("src/")
@@ -65,6 +75,9 @@ const listFiles = Effect.gen(function* () {
 ### Read Symbolic Link
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const readLink = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const target = yield* fs.readLink("symlink")
@@ -77,6 +90,9 @@ const readLink = Effect.gen(function* () {
 ### Write File (Binary)
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const writeBinary = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const data = new Uint8Array([0x48, 0x65, 0x6c, 0x6c, 0x6f])
@@ -87,6 +103,9 @@ const writeBinary = Effect.gen(function* () {
 ### Write File (String)
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const writeText = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   yield* fs.writeFileString("output.txt", "Hello, World!")
@@ -96,7 +115,8 @@ const writeText = Effect.gen(function* () {
 ### Sink (Stream Writing)
 
 ```typescript
-import { Stream, pipe } from "effect"
+import { FileSystem } from "@effect/platform"
+import { Effect, Stream, pipe } from "effect"
 
 const writeStream = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
@@ -115,6 +135,9 @@ const writeStream = Effect.gen(function* () {
 ### Copy File
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const copyFile = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   yield* fs.copyFile("source.txt", "dest.txt")
@@ -124,6 +147,9 @@ const copyFile = Effect.gen(function* () {
 ### Copy (Recursive Directory)
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const copyDir = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   yield* fs.copy("src-dir/", "dest-dir/")
@@ -133,6 +159,9 @@ const copyDir = Effect.gen(function* () {
 ### Rename/Move
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const renameFile = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   yield* fs.rename("old-name.txt", "new-name.txt")
@@ -142,6 +171,9 @@ const renameFile = Effect.gen(function* () {
 ### Remove
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const removeFile = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   yield* fs.remove("file.txt")
@@ -158,6 +190,7 @@ const removeDir = Effect.gen(function* () {
 
 ```typescript
 import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
 
 const useFileHandle = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
@@ -176,6 +209,9 @@ const useFileHandle = Effect.gen(function* () {
 ### Make Directory
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const createDir = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   yield* fs.makeDirectory("new-dir/")
@@ -188,6 +224,9 @@ const createDir = Effect.gen(function* () {
 ### Make Temp Directory
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const useTempDir = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const tempPath = yield* fs.makeTempDirectory()
@@ -203,6 +242,7 @@ const useTempDir = Effect.gen(function* () {
 ### Make Temp Directory (Scoped)
 
 ```typescript
+import { FileSystem } from "@effect/platform"
 import { Effect } from "effect"
 
 const useScopedTempDir = Effect.gen(function* () {
@@ -221,21 +261,27 @@ const useScopedTempDir = Effect.gen(function* () {
 ### Stat (File Info)
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect, Console } from "effect"
+
 const getFileInfo = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const info = yield* fs.stat("file.txt")
 
-  console.log(info.type) // "File" | "Directory" | "SymbolicLink" | "Other"
-  console.log(info.size) // bigint
-  console.log(info.mtime) // Option<Date>
-  console.log(info.atime) // Option<Date>
-  console.log(info.birthtime) // Option<Date>
+  yield* Console.log(`Type: ${info.type}`) // "File" | "Directory" | "SymbolicLink" | "Other"
+  yield* Console.log(`Size: ${info.size}`) // bigint
+  yield* Console.log(`Modified: ${info.mtime}`) // Option<Date>
+  yield* Console.log(`Accessed: ${info.atime}`) // Option<Date>
+  yield* Console.log(`Created: ${info.birthtime}`) // Option<Date>
 })
 ```
 
 ### Access (Check Permissions)
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const checkAccess = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
 
@@ -253,6 +299,9 @@ const checkAccess = Effect.gen(function* () {
 ### Exists
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const fileExists = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const exists = yield* fs.exists("file.txt")
@@ -263,6 +312,9 @@ const fileExists = Effect.gen(function* () {
 ### Real Path (Resolve Symlinks)
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const resolvePath = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const realPath = yield* fs.realPath("symlink-or-relative-path")
@@ -275,6 +327,9 @@ const resolvePath = Effect.gen(function* () {
 ### Change Mode (chmod)
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const changeMode = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   yield* fs.chmod("script.sh", 0o755)
@@ -284,6 +339,9 @@ const changeMode = Effect.gen(function* () {
 ### Change Owner (chown)
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const changeOwner = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   yield* fs.chown("file.txt", 1000, 1000) // uid, gid
@@ -293,6 +351,9 @@ const changeOwner = Effect.gen(function* () {
 ### Update Times (utimes)
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const updateTimes = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const now = new Date()
@@ -305,6 +366,9 @@ const updateTimes = Effect.gen(function* () {
 ### Hard Link
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const createHardLink = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   yield* fs.link("original.txt", "hardlink.txt")
@@ -314,6 +378,9 @@ const createHardLink = Effect.gen(function* () {
 ### Symbolic Link
 
 ```typescript
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
+
 const createSymlink = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   yield* fs.symlink("target.txt", "symlink.txt")
@@ -325,7 +392,8 @@ const createSymlink = Effect.gen(function* () {
 ### Watch Files/Directories
 
 ```typescript
-import { Stream } from "effect"
+import { FileSystem } from "@effect/platform"
+import { Effect, Stream, Console, pipe } from "effect"
 
 const watchFiles = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
@@ -342,9 +410,7 @@ const consumeWatchEvents = Effect.gen(function* () {
   yield* pipe(
     events,
     Stream.runForEach(event =>
-      Effect.sync(() => {
-        console.log(`Event: ${event.type}, Path: ${event.path}`)
-      })
+      Console.log(`Event: ${event.type}, Path: ${event.path}`)
     )
   )
 })
@@ -354,6 +420,7 @@ const consumeWatchEvents = Effect.gen(function* () {
 
 ```typescript
 import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
 
 const { Size, KiB, MiB, GiB } = FileSystem
 
@@ -396,8 +463,8 @@ FileSystem operations fail with `PlatformError` containing a `SystemErrorReason`
 ### Error Handling Pattern
 
 ```typescript
-import { Effect, pipe } from "effect"
 import { FileSystem } from "@effect/platform"
+import { Effect, pipe } from "effect"
 
 const readConfigWithFallback = pipe(
   Effect.gen(function* () {
@@ -419,7 +486,8 @@ const readConfigWithFallback = pipe(
 ### Typed Error Recovery
 
 ```typescript
-import { Data } from "effect"
+import { FileSystem } from "@effect/platform"
+import { Effect, Data, pipe } from "effect"
 
 class ConfigNotFound extends Data.TaggedError("ConfigNotFound")<{
   path: string
@@ -450,7 +518,8 @@ const readConfig = (path: string) =>
 ## Scoped Resources Pattern
 
 ```typescript
-import { Effect, Scope } from "effect"
+import { FileSystem } from "@effect/platform"
+import { Effect } from "effect"
 
 const processInTempDir = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
@@ -478,8 +547,9 @@ const processInTempDir = Effect.gen(function* () {
 ### Node.js
 
 ```typescript
+import { FileSystem } from "@effect/platform"
 import { NodeFileSystem } from "@effect/platform-node"
-import { Effect, Layer } from "effect"
+import { Effect } from "effect"
 
 const program = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
@@ -497,7 +567,11 @@ Effect.runPromise(runnable)
 ### Bun
 
 ```typescript
+import { FileSystem } from "@effect/platform"
 import { BunFileSystem } from "@effect/platform-bun"
+import { Effect } from "effect"
+
+declare const program: Effect.Effect<string, never, FileSystem.FileSystem>
 
 const runnable = program.pipe(
   Effect.provide(BunFileSystem.layer)

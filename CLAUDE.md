@@ -60,6 +60,13 @@ Strive for high signal-to-noise ratio in code:
 ### Example Pipeline Style
 
 ```typescript
+import { Array, pipe } from "effect"
+
+declare const data: ReadonlyArray<unknown>
+declare const transform: (x: unknown) => unknown
+declare const predicate: (x: unknown) => boolean
+declare const combine: (acc: unknown, x: unknown) => unknown
+
 const result = pipe(
   data,
   Array.map(transform),
@@ -71,9 +78,23 @@ const result = pipe(
 ### Example Pattern Matching
 
 ```typescript
+import { Data, pipe } from "effect"
+
+type Matcher = Data.TaggedEnum<{
+  Exact: {}
+  Fuzzy: { scorer: (a: string, b: string) => number }
+}>
+
+const { $match } = Data.taggedEnum<Matcher>()
+
+declare const matcher: Matcher
+declare const value: string
+declare const exactMatch: (v: string) => string
+declare const fuzzyMatch: (v: string, scorer: (a: string, b: string) => number) => string
+
 const result = pipe(
   matcher,
-  match({
+  $match({
     Exact: () => exactMatch(value),
     Fuzzy: ({ scorer }) => fuzzyMatch(value, scorer)
   })
@@ -96,15 +117,20 @@ const result = pipe(
 - Proper dependency injection and composition
 
 ```typescript
+import { Clock, DateTime, Effect, Random } from "effect"
+
 // ❌ WRONG - untestable
 const timestamp = Date.now()
 const randomValue = Math.random()
 
 // ✅ CORRECT - testable
-const timestamp = yield* Clock.currentTimeMillis
-const datetime = yield* DateTime.now
-const randomValue = yield* Random.next
-  ```
+const program = Effect.gen(function* () {
+  const timestamp = yield* Clock.currentTimeMillis
+  const datetime = yield* DateTime.now
+  const randomValue = yield* Random.next
+  return { timestamp, datetime, randomValue }
+})
+```
 
 ## Feature Implementation Workflow
 

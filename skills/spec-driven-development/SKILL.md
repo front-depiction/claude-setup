@@ -179,8 +179,11 @@ The `specs/README.md` maintains a simple checkbox list of all features:
 
 ### Schema
 ```typescript
-interface DataModel {
-  // Type definitions
+export interface DataModel {
+  readonly id: string
+  readonly name: string
+  readonly value: number
+  readonly createdAt: Date
 }
 ```
 
@@ -265,15 +268,29 @@ interface DataModel {
 ### Public Interface
 
 ```typescript
+import { Effect, Context } from "effect"
+
+// Declare types used in examples
+declare const Input1: unique symbol
+declare const Output1: unique symbol
+declare const Error1: unique symbol
+declare const Deps1: unique symbol
+declare const Input2: unique symbol
+declare const Output2: unique symbol
+declare const Error2: unique symbol
+declare const Deps2: unique symbol
+
 export interface FeatureService {
-  readonly operation1: (input: Input1) => Effect.Effect<Output1, Error1, Deps1>
-  readonly operation2: (input: Input2) => Effect.Effect<Output2, Error2, Deps2>
+  readonly operation1: (input: typeof Input1) => Effect.Effect<typeof Output1, typeof Error1, typeof Deps1>
+  readonly operation2: (input: typeof Input2) => Effect.Effect<typeof Output2, typeof Error2, typeof Deps2>
 }
 ```
 
 ### Type Definitions
 
 ```typescript
+import { Data } from "effect"
+
 // Domain types
 export interface DomainType {
   readonly field1: string
@@ -291,7 +308,7 @@ export class FeatureError extends Data.TaggedError("FeatureError")<{
 ### Schemas
 
 ```typescript
-import * as Schema from "effect/Schema"
+import { Schema } from "effect"
 
 export const InputSchema = Schema.Struct({
   field1: Schema.String,
@@ -328,6 +345,21 @@ export interface Input extends Schema.Schema.Type<typeof InputSchema> {}
 ### Error Handling
 
 ```typescript
+import { Effect, Data } from "effect"
+
+// Declare error types
+declare class ValidationError extends Data.TaggedError("ValidationError")<{
+  readonly message: string
+}> {}
+
+declare class DatabaseError extends Data.TaggedError("DatabaseError")<{
+  readonly message: string
+}> {}
+
+declare class BusinessRuleError extends Data.TaggedError("BusinessRuleError")<{
+  readonly message: string
+}> {}
+
 // Error hierarchy
 export type FeatureError =
   | ValidationError
@@ -335,18 +367,36 @@ export type FeatureError =
   | BusinessRuleError
 
 // Recovery strategy example
-// Effect.catchTags({
-//   ValidationError: (e) => /* retry with corrected input */,
-//   DatabaseError: (e) => /* fallback to cache */,
-//   BusinessRuleError: (e) => /* notify user */
-// })
+declare const operation: Effect.Effect<string, FeatureError, never>
+
+const recovered = operation.pipe(
+  Effect.catchTags({
+    ValidationError: (_e: ValidationError) => Effect.succeed("retry with corrected input"),
+    DatabaseError: (_e: DatabaseError) => Effect.succeed("fallback to cache"),
+    BusinessRuleError: (_e: BusinessRuleError) => Effect.succeed("notify user")
+  })
+)
 ```
 
 ### Streams (if applicable)
 
 ```typescript
+import { Stream } from "effect"
+
+// Declare types
+declare const Update: unique symbol
+declare type Update = typeof Update
+declare const CustomError: unique symbol
+declare type CustomError = typeof CustomError
+declare const Deps: unique symbol
+declare type Deps = typeof Deps
+
+declare const source: EventSource
+declare function parse(event: MessageEvent): Update
+declare function validate(update: Update): boolean
+
 // Real-time updates
-const updates: Stream.Stream<Update, Error, Deps> =
+const updates: Stream.Stream<Update, CustomError, Deps> =
   Stream.fromEventSource(source).pipe(
     Stream.map(parse),
     Stream.filter(validate)
@@ -370,12 +420,11 @@ src/
 
 ```typescript
 // Internal
-import { DatabaseService } from "../database"
-import { LoggerService } from "../logger"
+import type { DatabaseService } from "../database"
+import type { LoggerService } from "../logger"
 
 // External
-import * as Schema from "effect/Schema"
-import { Effect, Layer, Stream } from "effect"
+import { Schema, Effect, Layer, Stream } from "effect"
 ```
 
 ## Testing Strategy
@@ -393,6 +442,27 @@ import { Effect, Layer, Stream } from "effect"
 ### Test Structure
 
 ```typescript
+import { Effect, Layer, Context } from "effect"
+import { describe, it, expect } from "vitest"
+
+// Declare service interface
+interface FeatureService {
+  readonly operation: (input: string) => Effect.Effect<string, never, never>
+}
+
+const FeatureService = Context.GenericTag<FeatureService>("FeatureService")
+
+// Declare layers
+declare const FeatureServiceLive: Layer.Layer<FeatureService, never, DatabaseService | ConfigService>
+declare const DatabaseTest: Layer.Layer<DatabaseService, never, never>
+declare const ConfigTest: Layer.Layer<ConfigService, never, never>
+
+// Declare types
+declare const DatabaseService: Context.Tag<DatabaseService, {}>
+declare const ConfigService: Context.Tag<ConfigService, {}>
+declare const validInput: string
+declare const expectedOutput: string
+
 describe("FeatureService", () => {
   const TestLive = FeatureServiceLive.pipe(
     Layer.provide(DatabaseTest),
@@ -706,6 +776,20 @@ Use the `AskUserQuestion` tool liberally throughout:
 
 Example:
 ```typescript
+// Example of tool call structure (not executable TypeScript)
+declare function AskUserQuestion(params: {
+  questions: Array<{
+    question: string
+    header: string
+    multiSelect: boolean
+    options: Array<{
+      label: string
+      description: string
+    }>
+  }>
+}): void
+
+// Usage:
 AskUserQuestion({
   questions: [{
     question: "How should we handle concurrent updates to the counter?",

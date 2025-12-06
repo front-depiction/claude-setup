@@ -30,25 +30,30 @@ import { Command, CommandExecutor } from "@effect/platform"
 ### Basic Command
 
 ```typescript
+import { Command } from "@effect/platform"
+import { pipe } from "effect"
+
+declare const PROJECT_ROOT: string
+
 // Simple command with arguments
 const command = Command.make("echo", "-n", "test")
 
 // With working directory
-const command = pipe(
+const commandWithDir = pipe(
   Command.make("npm", "install"),
   Command.workingDirectory("/path/to/project")
 )
 
 // With environment variables
-const command = pipe(
+const commandWithEnv = pipe(
   Command.make("node", "script.js"),
   Command.env({ NODE_ENV: "production", API_KEY: "xyz" })
 )
 
 // Control stdio streams
-const command = pipe(
+const commandWithStdio = pipe(
   Command.make("hardhat", "node"),
-  Command.stdout("inherit"),  // "inherit" | "pipe" | "ignore"
+  Command.stdout("inherit"),  // "inherit" | "pipe"
   Command.stderr("inherit"),
   Command.workingDirectory(PROJECT_ROOT)
 )
@@ -57,15 +62,23 @@ const command = pipe(
 ### Command Configuration Options
 
 ```typescript
+import { Command } from "@effect/platform"
+import type { Stream } from "effect"
+
+declare const stream: Stream.Stream<Uint8Array>
+declare const stringInput: string
+
 // stdout/stderr modes:
 // - "inherit": Pass through to parent process
 // - "pipe": Capture for programmatic access
-// - "ignore": Discard output
 
-Command.stdout("pipe")    // Capture output
-Command.stderr("inherit") // Show errors in console
-Command.stdin(stream)     // Pipe stream as stdin
-Command.feed(string)      // Feed string as stdin
+const configuredCommand = pipe(
+  Command.make("some-command"),
+  Command.stdout("pipe"),    // Capture output
+  Command.stderr("inherit"), // Show errors in console
+  Command.stdin(stream),     // Pipe stream as stdin
+  Command.feed(stringInput)  // Feed string as stdin
+)
 ```
 
 ## Executing Commands
@@ -73,6 +86,9 @@ Command.feed(string)      // Feed string as stdin
 ### Capture as String
 
 ```typescript
+import { Command } from "@effect/platform"
+import { Effect } from "effect"
+
 const result = Effect.gen(function* () {
   const command = Command.make("echo", "-n", "hello")
   const output = yield* Command.string(command)
@@ -84,6 +100,9 @@ const result = Effect.gen(function* () {
 ### Capture as Lines
 
 ```typescript
+import { Command } from "@effect/platform"
+import { Effect } from "effect"
+
 const result = Effect.gen(function* () {
   const command = Command.make("ls", "-1")
   const lines = yield* Command.lines(command)
@@ -95,6 +114,11 @@ const result = Effect.gen(function* () {
 ### Stream Output
 
 ```typescript
+import { Command } from "@effect/platform"
+import { Effect, Stream, Chunk, Console, pipe } from "effect"
+
+declare const decoder: TextDecoder
+
 const result = Effect.gen(function* () {
   const command = Command.make("tail", "-f", "app.log")
 
@@ -115,6 +139,9 @@ const result = Effect.gen(function* () {
 ### Get Exit Code
 
 ```typescript
+import { Command } from "@effect/platform"
+import { Effect } from "effect"
+
 const result = Effect.gen(function* () {
   const command = Command.make("test", "-f", "file.txt")
   const exitCode = yield* Command.exitCode(command)
@@ -128,6 +155,12 @@ const result = Effect.gen(function* () {
 ### Start Process with Handle
 
 ```typescript
+import { Command, CommandExecutor } from "@effect/platform"
+import { Effect, Stream, pipe } from "effect"
+
+declare const PROJECT_ROOT: string
+declare function handleOutput(chunk: Uint8Array): Effect.Effect<void>
+
 const program = Effect.gen(function* () {
   // Get the executor service
   const executor = yield* CommandExecutor.CommandExecutor
@@ -156,6 +189,12 @@ const program = Effect.gen(function* () {
 ### Automatic Cleanup with Finalizers
 
 ```typescript
+import { Command, CommandExecutor } from "@effect/platform"
+import { Effect, pipe } from "effect"
+
+declare const PROJECT_ROOT: string
+declare const waitForHardhat: Effect.Effect<void>
+
 const startHardhatNode = Effect.gen(function* () {
   const executor = yield* CommandExecutor.CommandExecutor
 
@@ -187,6 +226,9 @@ const program = pipe(
 ### Scoped Process Management
 
 ```typescript
+import { Command } from "@effect/platform"
+import { Effect, pipe } from "effect"
+
 const runWithProcess = Effect.gen(function* () {
   const command = Command.make("sleep", "100")
 
@@ -205,6 +247,9 @@ const runWithProcess = Effect.gen(function* () {
 ## Piping Commands
 
 ```typescript
+import { Command } from "@effect/platform"
+import { Effect, pipe } from "effect"
+
 const program = Effect.gen(function* () {
   // Pipe commands together like shell pipelines
   const command = pipe(
@@ -223,6 +268,9 @@ const program = Effect.gen(function* () {
 Commands fail with typed `SystemError`:
 
 ```typescript
+import { Command } from "@effect/platform"
+import { Effect, pipe } from "effect"
+
 const program = Effect.gen(function* () {
   const command = Command.make("non-existent-command")
 
@@ -248,6 +296,9 @@ const program = Effect.gen(function* () {
 import { Effect, Schedule, Scope, Exit, pipe } from "effect"
 import { Command, CommandExecutor } from "@effect/platform"
 import { BunContext } from "@effect/platform-bun"
+
+declare function createPublicClient(config: { transport: unknown }): { getChainId(): Promise<number> }
+declare function http(url: string): unknown
 
 const PROJECT_ROOT = new URL("../", import.meta.url).pathname
 
@@ -342,6 +393,10 @@ export async function teardown() {
 ### 1. Always Use CommandExecutor for Process Handles
 
 ```typescript
+import { CommandExecutor } from "@effect/platform"
+
+declare const command: Command.Command
+
 // Get the executor service first
 const executor = yield* CommandExecutor.CommandExecutor
 const process = yield* executor.start(command)
@@ -350,6 +405,10 @@ const process = yield* executor.start(command)
 ### 2. Use Finalizers for Cleanup
 
 ```typescript
+import { Effect, pipe } from "effect"
+
+declare const process: { kill(signal: string): Effect.Effect<void> }
+
 // Register cleanup that runs when scope closes
 yield* Effect.addFinalizer(() =>
   process.kill("SIGTERM").pipe(Effect.ignoreLogged)
@@ -359,6 +418,11 @@ yield* Effect.addFinalizer(() =>
 ### 3. Scope Long-Running Processes
 
 ```typescript
+import { Command } from "@effect/platform"
+import { Effect, pipe } from "effect"
+
+declare const command: Command.Command
+
 // Wrap in Effect.scoped to ensure cleanup
 const program = Effect.gen(function* () {
   const process = yield* Command.start(command)
@@ -369,24 +433,32 @@ const program = Effect.gen(function* () {
 ### 4. Control stdio Based on Needs
 
 ```typescript
+import { Command } from "@effect/platform"
+import { pipe } from "effect"
+
+declare const someCommand: Command.Command
+
 // Inherit for visibility (dev/debug)
-Command.stdout("inherit")
+const withInherit = pipe(someCommand, Command.stdout("inherit"))
 
 // Pipe for programmatic access
-Command.stdout("pipe")
-
-// Ignore to suppress output
-Command.stdout("ignore")
+const withPipe = pipe(someCommand, Command.stdout("pipe"))
 ```
 
 ### 5. Handle Errors with catchTag
 
 ```typescript
-yield* Command.string(command).pipe(
+import { Command } from "@effect/platform"
+import { Effect, pipe } from "effect"
+
+declare const command: Command.Command
+
+const result = yield* Command.string(command).pipe(
   Effect.catchTag("SystemError", (error) => {
     // Handle specific error reasons
-    if (error.reason === "NotFound") { /* ... */ }
-    if (error.reason === "PermissionDenied") { /* ... */ }
+    if (error.reason === "NotFound") { /* ... */ return Effect.succeed("") }
+    if (error.reason === "PermissionDenied") { /* ... */ return Effect.succeed("") }
+    return Effect.succeed("")
   })
 )
 ```
@@ -397,7 +469,10 @@ Commands are testable using Layer.mock:
 
 ```typescript
 import { it } from "@effect/vitest"
-import { Layer } from "effect"
+import { Layer, Effect } from "effect"
+import { Command, CommandExecutor } from "@effect/platform"
+
+declare const mockProcess: CommandExecutor.Process
 
 it.effect("runs command", () =>
   Effect.gen(function* () {
@@ -405,9 +480,9 @@ it.effect("runs command", () =>
     expect(output).toBe("test")
   }).pipe(
     Effect.provide(
-      Layer.mock(CommandExecutor.CommandExecutor, {
+      Layer.succeed(CommandExecutor.CommandExecutor, {
         start: () => Effect.succeed(mockProcess)
-      })
+      } as CommandExecutor.CommandExecutor)
     )
   )
 )
@@ -418,29 +493,50 @@ it.effect("runs command", () =>
 ### 1. Don't Forget to Scope Process Management
 
 ```typescript
+import { CommandExecutor } from "@effect/platform"
+import { Effect, pipe } from "effect"
+
+declare const executor: CommandExecutor.CommandExecutor
+declare const command: Command.Command
+
 // ❌ WRONG - process leaks if program fails
-const process = yield* executor.start(command)
+const wrongWay = Effect.gen(function* () {
+  const process = yield* executor.start(command)
+  // ...
+})
 
 // ✅ CORRECT - cleanup guaranteed
-const process = yield* executor.start(command)
-yield* Effect.addFinalizer(() => process.kill("SIGTERM").pipe(Effect.ignoreLogged))
+const rightWay = Effect.gen(function* () {
+  const process = yield* executor.start(command)
+  yield* Effect.addFinalizer(() => process.kill("SIGTERM").pipe(Effect.ignoreLogged))
+  // ...
+})
 ```
 
 ### 2. Choose Correct stdio Mode
 
 ```typescript
+import { Command } from "@effect/platform"
+import { pipe } from "effect"
+
+declare const someCommand: Command.Command
+
 // ❌ WRONG - can't capture output with "inherit"
-Command.stdout("inherit")
-const output = yield* Command.string(command)  // Empty!
+const wrongCommand = pipe(someCommand, Command.stdout("inherit"))
+const wrongOutput = yield* Command.string(wrongCommand)  // Empty!
 
 // ✅ CORRECT - use "pipe" to capture
-Command.stdout("pipe")
-const output = yield* Command.string(command)
+const rightCommand = pipe(someCommand, Command.stdout("pipe"))
+const rightOutput = yield* Command.string(rightCommand)
 ```
 
 ### 3. Use ignoreLogged for Finalizer Errors
 
 ```typescript
+import { Effect, pipe } from "effect"
+
+declare const process: { kill(signal: string): Effect.Effect<void> }
+
 // ❌ WRONG - finalizer errors can mask original errors
 yield* Effect.addFinalizer(() => process.kill("SIGTERM"))
 

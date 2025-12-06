@@ -16,12 +16,16 @@ Schema is an import at effect/Schema. not @effect/schema.
 **Multi-step transformation:**
 
 ```typescript
+import { Schema } from "effect"
+
 const TruthySchema = Schema.compose(Schema.BooleanFromUnknown, Schema.Literal(true))
 ```
 
 **Sequential refinements:**
 
 ```typescript
+import { Schema } from "effect"
+
 const PositiveInt = Schema.Number.pipe(
   Schema.int(),
   Schema.positive()
@@ -31,6 +35,8 @@ const PositiveInt = Schema.Number.pipe(
 **Negation (NOT a class constructor, it's a transformation schema):**
 
 ```typescript
+import { Schema } from "effect"
+
 // Schema.Not is boolean → boolean transformation
 const NotFromUnknown = Schema.compose(Schema.BooleanFromUnknown, Schema.Not)
 ```
@@ -65,6 +71,12 @@ const NotFromUnknown = Schema.compose(Schema.BooleanFromUnknown, Schema.Not)
 **Pattern 1: Direct flatMap (no wrapper lambda needed)**
 
 ```typescript
+import { Effect, Schema } from "effect"
+
+declare const self: Effect.Effect<unknown, Error, never>
+declare const schema: Schema.Schema<number, unknown, never>
+declare const toError: (error: Schema.ParseError) => Error
+
 // ❌ Verbose
 self.pipe(
   Effect.flatMap((value) =>
@@ -84,6 +96,10 @@ self.pipe(
 **Pattern 2: Extract schema factories**
 
 ```typescript
+import { Effect, Schema } from "effect"
+
+declare const toAssertionError: (error: Schema.ParseError) => Error
+
 const createGreaterThanSchema = (n: number) =>
   Schema.Number.pipe(Schema.greaterThan(n))
 
@@ -98,6 +114,10 @@ export const beGreaterThan = (n: number) =>
 **Pattern 3: Reuse composed schemas**
 
 ```typescript
+import { Effect, Schema } from "effect"
+
+declare const toAssertionError: (error: Schema.ParseError) => Error
+
 const TruthySchema = Schema.compose(Schema.BooleanFromUnknown, Schema.Literal(true))
 
 export const beTruthy = () =>
@@ -119,7 +139,13 @@ export const beTruthy = () =>
 4. **Error mapping** should be outside `flatMap` for cleaner composition:
 
    ```typescript
-   .pipe(
+   import { Effect, Schema } from "effect"
+
+   declare const toAssertionError: (error: Schema.ParseError) => Error
+   declare const schema: Schema.Schema<number, unknown, never>
+   declare const self: Effect.Effect<unknown, Error, never>
+
+   self.pipe(
      Effect.flatMap(Schema.decodeUnknown(schema)),
      Effect.mapError(toAssertionError)
    )

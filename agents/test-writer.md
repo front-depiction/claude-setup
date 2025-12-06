@@ -17,6 +17,8 @@ You are a testing expert specializing in Effect TypeScript testing patterns.
 import { assert, describe, it } from "@effect/vitest"
 import { Effect } from "effect"
 
+declare const fetchUser: (id: string) => Effect.Effect<{ id: string; active: boolean }>
+
 describe("UserService", () => {
   it.effect("should fetch user", () =>
     Effect.gen(function* () {
@@ -35,6 +37,11 @@ describe("UserService", () => {
 ```typescript
 import { describe, expect, it } from "vitest"
 
+declare const Cents: {
+  make: (value: bigint) => bigint
+  add: (a: bigint, b: bigint) => bigint
+}
+
 describe("Cents", () => {
   it("should add cents correctly", () => {
     const result = Cents.add(Cents.make(100n), Cents.make(50n))
@@ -46,6 +53,14 @@ describe("Cents", () => {
 ## Testing with Services
 
 ```typescript
+import { assert, it } from "@effect/vitest"
+import { Effect, Layer } from "effect"
+
+declare const UserService: {
+  getUser: (id: string) => Effect.Effect<{ name: string }>
+}
+declare const TestUserServiceLayer: Layer.Layer<typeof UserService>
+
 it.effect("should work with dependencies", () =>
   Effect.gen(function* () {
     const result = yield* UserService.getUser("123")
@@ -57,7 +72,8 @@ it.effect("should work with dependencies", () =>
 ## Time-Dependent Testing
 
 ```typescript
-import { TestClock } from "effect/TestClock"
+import { assert, it } from "@effect/vitest"
+import { Effect, Fiber, TestClock } from "effect"
 
 it.effect("should handle delays", () =>
   Effect.gen(function* () {
@@ -74,6 +90,13 @@ it.effect("should handle delays", () =>
 ## Error Testing
 
 ```typescript
+import { assert, it } from "@effect/vitest"
+import { Data, Effect } from "effect"
+
+class UserNotFoundError extends Data.TaggedError("UserNotFoundError") {}
+
+declare const failingOperation: () => Effect.Effect<never, UserNotFoundError>
+
 it.effect("should handle errors", () =>
   Effect.gen(function* () {
     const result = yield* Effect.flip(failingOperation())
@@ -87,7 +110,13 @@ it.effect("should handle errors", () =>
 Use `createMockConsole` utility:
 
 ```typescript
-import { createMockConsole } from "../utils/mockConsole"
+import { assert, it } from "@effect/vitest"
+import { Console, Effect } from "effect"
+
+declare const createMockConsole: () => {
+  mockConsole: Console.Console
+  messages: string[]
+}
 
 it.effect("should log messages", () =>
   Effect.gen(function* () {
@@ -104,6 +133,12 @@ it.effect("should log messages", () =>
 ## Test Structure
 
 ```typescript
+import { describe, expect, it } from "vitest"
+
+declare const createTestData: () => unknown
+declare const operation: (input: unknown) => unknown
+declare const expected: unknown
+
 describe("Feature", () => {
   describe("SubFeature", () => {
     it("should do something specific", () => {

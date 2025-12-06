@@ -40,7 +40,7 @@ Every type module MUST provide:
 Define the main type using `Schema.TaggedStruct` for each variant:
 
 ```typescript
-import { Schema, Equal } from "effect"
+import { Schema } from "effect"
 
 // Define schemas for each union member using TaggedStruct
 // Schema.Data provides automatic Equal implementation
@@ -122,7 +122,12 @@ export type Completed = Schema.Schema.Type<typeof Completed>
 Use `Schema.decodeSync` to create constructor functions:
 
 ```typescript
-import * as DateTime from "effect/DateTime"
+import { Schema } from "effect"
+
+// Assuming Pending, Active, Completed schemas are defined above
+declare const Pending: Schema.Schema<any, any, never>
+declare const Active: Schema.Schema<any, any, never>
+declare const Completed: Schema.Schema<any, any, never>
 
 /**
  * Create a pending task.
@@ -131,22 +136,6 @@ import * as DateTime from "effect/DateTime"
  *
  * @category Constructors
  * @since 0.1.0
- * @example
- * import * as Task from "@/schemas/Task"
- * import * as DateTime from "effect/DateTime"
- *
- * const task = Task.makePending({
- *   id: "task-123",
- *   createdAt: DateTime.unsafeNow()
- * })
- *
- * // With Equal support from Schema.Data:
- * const another = Task.makePending({
- *   id: "task-123",
- *   createdAt: DateTime.unsafeNow()
- * })
- *
- * Effect.log(Equal.equals(task, another)) // structural equality
  */
 export const makePending = Schema.decodeSync(Pending)
 
@@ -176,8 +165,8 @@ export const makeCompleted = Schema.decodeSync(Completed)
 **Usage Pattern:**
 
 ```typescript
-// Import as namespace to get User.makeAdmin pattern
 import * as Task from "@/schemas/Task"
+import * as DateTime from "effect/DateTime"
 
 const task = Task.makePending({
   id: "123",
@@ -191,17 +180,20 @@ const task = Task.makePending({
 Use `Schema.is` for the union and manual refinements for variants:
 
 ```typescript
+import { Schema } from "effect"
+
+// Type declarations
+declare const Task: Schema.Schema<any, any, never>
+type Task = Schema.Schema.Type<typeof Task>
+type Pending = Task & { _tag: "pending" }
+type Active = Task & { _tag: "active" }
+type Completed = Task & { _tag: "completed" }
+
 /**
  * Type guard for Task.
  *
  * @category Guards
  * @since 0.1.0
- * @example
- * import * as Task from "@/schemas/Task"
- *
- * if (Task.isTask(value)) {
- *   // value is Task
- * }
  */
 export const isTask = Schema.is(Task)
 
@@ -210,12 +202,6 @@ export const isTask = Schema.is(Task)
  *
  * @category Guards
  * @since 0.1.0
- * @example
- * import * as Task from "@/schemas/Task"
- *
- * if (Task.isPending(task)) {
- *   // task is Pending
- * }
  */
 export const isPending = (self: Task): self is Pending => self._tag === "pending"
 
@@ -241,22 +227,12 @@ export const isCompleted = (self: Task): self is Completed => self._tag === "com
 With `Schema.Data`, equality is handled via `Equal.equals()`. For custom equivalence:
 
 ```typescript
+import { Schema } from "effect"
 import * as Equivalence from "effect/Equivalence"
 
-/**
- * Primary approach: Use Equal.equals() from Schema.Data
- *
- * @example
- * import * as Equal from "effect/Equal"
- *
- * const task1 = Task.makePending({ id: "1", createdAt: DateTime.unsafeNow() })
- * const task2 = Task.makePending({ id: "1", createdAt: DateTime.unsafeNow() })
- *
- * // Structural equality (automatic from Schema.Data)
- * if (Equal.equals(task1, task2)) {
- *   // Equal
- * }
- */
+// Type declarations
+declare const Task: Schema.Schema<any, any, never>
+type Task = Schema.Schema.Type<typeof Task> & { id: string; _tag: string }
 
 /**
  * Export additional Equivalence instances for multiple comparison strategies.
@@ -281,29 +257,11 @@ export const Equivalence = Schema.equivalence(Task)
  *
  * @category Equivalence
  * @since 0.1.0
- * @example
- * import * as Task from "@/schemas/Task"
- *
- * // Compare by ID only
- * const areTasksSame = Task.EquivalenceById(task1, task2)
  */
 export const EquivalenceById = Equivalence.mapInput(
   Equivalence.string,
   (task: Task) => task.id
 )
-
-/**
- * Combine multiple equivalences.
- *
- * @category Equivalence
- * @since 0.1.0
- * @example
- * // First compare by tag, then by ID
- * const byTagAndId = Equivalence.combine(
- *   Equivalence.mapInput(Equivalence.string, (t: Task) => t._tag),
- *   Task.EquivalenceById
- * )
- */
 ```
 
 **Alternative: Custom Equivalence via Annotations**
@@ -311,6 +269,14 @@ export const EquivalenceById = Equivalence.mapInput(
 When you need domain-specific equality logic:
 
 ```typescript
+import { Schema } from "effect"
+
+// Assuming schemas and equivalence defined
+declare const Pending: Schema.Schema<any, any, never>
+declare const Active: Schema.Schema<any, any, never>
+declare const Completed: Schema.Schema<any, any, never>
+declare const EquivalenceById: any
+
 export const Task = Schema.Union(Pending, Active, Completed).pipe(
   Schema.Data,
   Schema.annotations({
@@ -326,20 +292,23 @@ Only use manual Equal.Symbol implementation for internal library interfaces that
 
 ```typescript
 import * as Equal from "effect/Equal"
+import * as Hash from "effect/Hash"
 
 interface User extends Equal.Equal {
   readonly id: string
   readonly name: string
-  readonly [Equal.Symbol](that: Equal.Equal): boolean
 }
 
 const makeUser = (id: string, name: string): User => ({
   id,
   name,
-  [Equal.Symbol](that: Equal.Equal) {
+  [Equal.symbol](that: Equal.Equal) {
     return that instanceof Object &&
            "id" in that &&
-           this.id === that.id
+           this.id === (that as User).id
+  },
+  [Hash.symbol]() {
+    return Hash.string(this.id)
   }
 })
 
@@ -354,22 +323,22 @@ Equal.equals(user1, user2) // true
 Pattern match on the discriminated union using `Match.typeTags`:
 
 ```typescript
-import * as Task from "@/schemas/Task"
+import * as Match from "effect/Match"
+
+// Type declaration
+type Task = {
+  _tag: "pending" | "active" | "completed"
+  id: string
+  createdAt: any
+  startedAt?: any
+  completedAt?: any
+}
 
 /**
  * Pattern match on Task using Match.typeTags.
  *
  * @category Pattern Matching
  * @since 0.1.0
- * @example
- *
- * const status = Task.match({
- *   pending: (t) => `Pending: ${t.id}`,
- *   active: (t) => `Active since ${t.startedAt}`,
- *   completed: (t) => `Completed at ${t.completedAt}`
- * })
- *
- * const result = status(task)
  */
 export const match = Match.typeTags<Task>()
 ```
@@ -385,15 +354,20 @@ Include these when semantically appropriate:
 When the type has a natural "zero" or "empty" value:
 
 ```typescript
+// Type declarations
+type Cents = bigint
+type List<A> = ReadonlyArray<A>
+type Unit = { readonly _tag: "Unit" }
+
+declare const make: (value: bigint) => Cents
+declare const makeEmpty: <A = never>() => List<A>
+declare const makeUnit: () => Unit
+
 /**
  * Empty value when meaningful.
  *
  * @category Identity
  * @since 0.1.0
- * @example
- * import * as Cents from "@/schemas/Cents"
- *
- * const noCost = Cents.zero
  */
 export const zero: Cents = make(0n)
 export const empty: List<never> = makeEmpty()
@@ -407,16 +381,17 @@ Functions that combine or transform values:
 ```typescript
 import { dual } from "effect/Function"
 
+// Type declarations
+type Cents = bigint
+type Config = Record<string, unknown>
+
+declare const make: (value: bigint) => Cents
+
 /**
  * Add two values.
  *
  * @category Combinators
  * @since 0.1.0
- * @example
- * import * as Cents from "@/schemas/Cents"
- * import { pipe } from "effect/Function"
- *
- * const total = pipe(price, Cents.add(tax))
  */
 export const add: {
   (that: Cents): (self: Cents) => Cents
@@ -441,6 +416,14 @@ Provide sorting capabilities using `Order.mapInput`:
 
 ```typescript
 import * as Order from "effect/Order"
+import * as DateTime from "effect/DateTime"
+
+// Type declaration
+type Task = {
+  _tag: "pending" | "active" | "completed"
+  id: string
+  createdAt: DateTime.DateTime.Utc
+}
 
 /**
  * Order by tag (pending < active < completed).
@@ -449,12 +432,6 @@ import * as Order from "effect/Order"
  *
  * @category Orders
  * @since 0.1.0
- * @example
- * import * as Task from "@/schemas/Task"
- * import * as Array from "effect/Array"
- * import { pipe } from "effect/Function"
- *
- * const sorted = pipe(tasks, Array.sort(Task.OrderByTag))
  */
 export const OrderByTag: Order.Order<Task> = Order.mapInput(
   Order.number,
@@ -489,11 +466,6 @@ export const OrderByCreatedAt: Order.Order<Task> =
  *
  * @category Orders
  * @since 0.1.0
- * @example
- * import * as Task from "@/schemas/Task"
- * import * as Array from "effect/Array"
- *
- * const sorted = Array.sort(tasks, Task.OrderByTagThenDate)
  */
 export const OrderByTagThenDate: Order.Order<Task> = Order.combine(
   OrderByTag,
@@ -517,15 +489,19 @@ export const OrderByTagThenDate: Order.Order<Task> = Order.combine(
 Safe extraction of inner values:
 
 ```typescript
+import * as DateTime from "effect/DateTime"
+
+// Type declaration
+type Task = {
+  id: string
+  createdAt: DateTime.DateTime.Utc
+}
+
 /**
  * Get the ID from any Task variant.
  *
  * @category Destructors
  * @since 0.1.0
- * @example
- * import * as Task from "@/schemas/Task"
- *
- * const id = Task.getId(task) // Works for any variant
  */
 export const getId = (self: Task): string => self.id
 
@@ -541,16 +517,19 @@ export const getCreatedAt = (self: Task): DateTime.DateTime.Utc => self.createdA
 ### Setters (Immutable Updates)
 
 ```typescript
+import { dual } from "effect/Function"
+
+// Type declaration
+type Task = {
+  id: string
+  [key: string]: unknown
+}
+
 /**
  * Update a field immutably.
  *
  * @category Setters
  * @since 0.1.0
- * @example
- * import * as Task from "@/schemas/Task"
- * import { pipe } from "effect/Function"
- *
- * const updated = pipe(task, Task.setId("new-id"))
  */
 export const setId: {
   (id: string): (self: Task) => Task
@@ -565,21 +544,6 @@ Use `Schema.suspend` for self-referencing types:
 ```typescript
 import { Schema } from "effect"
 
-/**
- * Recursive domain type example: Category with subcategories.
- *
- * @example
- * import * as Category from "@/schemas/Category"
- *
- * const root = Category.make({
- *   name: "Electronics",
- *   subcategories: [
- *     Category.make({ name: "Phones", subcategories: [] }),
- *     Category.make({ name: "Laptops", subcategories: [] })
- *   ]
- * })
- */
-
 // Separate base fields from recursive field
 const baseFields = {
   id: Schema.String,
@@ -592,7 +556,7 @@ interface Category extends Schema.Struct.Type<typeof baseFields> {
 }
 
 // Create schema with Schema.suspend for recursion
-export const Category = Schema.Struct({
+export const Category: Schema.Schema<Category> = Schema.Struct({
   ...baseFields,
   subcategories: Schema.Array(
     Schema.suspend((): Schema.Schema<Category> => Category)
@@ -604,7 +568,7 @@ export const Category = Schema.Struct({
     title: "Category",
     description: "A category that can contain nested subcategories",
   })
-)
+) as Schema.Schema<Category>
 
 export type Category = Schema.Schema.Type<typeof Category>
 export const make = Schema.decodeSync(Category)
@@ -616,14 +580,14 @@ interface CategoryEncoded extends Schema.Struct.Encoded<typeof baseFields> {
   readonly subcategories: ReadonlyArray<CategoryEncoded>
 }
 
-export const CategoryWithEncoded = Schema.Struct({
+export const CategoryWithEncoded: Schema.Schema<Category, CategoryEncoded> = Schema.Struct({
   ...baseFields,
   subcategories: Schema.Array(
     Schema.suspend(
       (): Schema.Schema<Category, CategoryEncoded> => CategoryWithEncoded
     )
   ),
-})
+}) as Schema.Schema<Category, CategoryEncoded>
 ```
 
 **Key Pattern: Schema.suspend**
@@ -639,7 +603,26 @@ export const CategoryWithEncoded = Schema.Struct({
 Check the project's `@/typeclass/` directory for available typeclasses, then implement only relevant ones:
 
 ```typescript
-import * as SomeTypeclass$ from "@/typeclass/SomeTypeclass"
+// Type declarations
+type Task = {
+  someRelevantField: string
+  [key: string]: unknown
+}
+
+interface SomeTypeclassInstance<A> {
+  get: (self: A) => string
+  set: (self: A, value: string) => A
+}
+
+declare namespace SomeTypeclass$ {
+  export const make: <A>(
+    get: (self: A) => string,
+    set: (self: A, value: string) => A
+  ) => SomeTypeclassInstance<A>
+
+  export const somePredicate: <A>(tc: SomeTypeclassInstance<A>) => (self: A) => boolean
+  export const OrderBySomeField: <A>(tc: SomeTypeclassInstance<A>) => (a: A, b: A) => number
+}
 
 /**
  * SomeTypeclass instance.
@@ -677,8 +660,12 @@ export const OrderBySomeField = SomeTypeclass$.OrderBySomeField(SomeTypeclass)
 import * as Task from "@/schemas/Task"
 import * as DateTime from "effect/DateTime"
 import * as Array from "effect/Array"
-import * as Order from "effect/Order"
 import * as Equal from "effect/Equal"
+
+// Assuming tasks, task1, task2 exist
+declare const tasks: ReadonlyArray<Task.Task>
+declare const task1: Task.Task
+declare const task2: Task.Task
 
 const task = Task.makePending({
   id: "123",
@@ -710,6 +697,12 @@ Use the Data module for immutable operations:
 ```typescript
 import { Data } from "effect"
 
+// Type declaration
+type Task = {
+  _tag: "pending" | "active" | "completed"
+  [key: string]: unknown
+}
+
 // Immutable update
 export const updateStatus = (self: Task, newTag: Task["_tag"]): Task =>
   Data.struct({ ...self, _tag: newTag })
@@ -720,20 +713,19 @@ export const updateStatus = (self: Task, newTag: Task["_tag"]): Task =>
 Always use DateTime and Duration, never Date or number:
 
 ```typescript
-// ✅ CORRECT
-import * as DateTime from "effect/DateTime"
-import * as Duration from "effect/Duration"
+import { Schema } from "effect"
 
+// ✅ CORRECT
 export const Task = Schema.TaggedStruct("task", {
   createdAt: Schema.DateTimeUtcFromSelf,  // UTC datetime
   duration: Schema.Duration,               // Duration type
 }).pipe(Schema.Data)
 
-// ❌ WRONG
-export const Task = Schema.TaggedStruct("task", {
-  createdAt: Schema.Date,        // Native Date
-  duration: Schema.Number,       // Number milliseconds
-})
+// ❌ WRONG - Don't do this
+// export const BadTask = Schema.TaggedStruct("task", {
+//   createdAt: Schema.Date,        // Native Date
+//   duration: Schema.Number,       // Number milliseconds
+// })
 ```
 
 ## Documentation Standards
@@ -813,19 +805,27 @@ When asked to create a domain model:
 **1. Schema.TaggedStruct** - Use for all tagged union variants
 
 ```typescript
+import { Schema } from "effect"
+
 const Admin = Schema.TaggedStruct("Admin", { name: Schema.String })
 ```
 
 **2. Schema.Data** - Automatic Equal implementation
 
 ```typescript
-const Admin = Schema.TaggedStruct("Admin", { /* fields */ }).pipe(Schema.Data)
+import { Schema } from "effect"
+
+const Admin = Schema.TaggedStruct("Admin", { name: Schema.String }).pipe(Schema.Data)
 // Enables: Equal.equals(admin1, admin2)
 ```
 
 **3. Schema.decodeSync** - Create constructors
 
 ```typescript
+import { Schema } from "effect"
+
+declare const Admin: Schema.Schema<any, any, never>
+
 export const makeAdmin = Schema.decodeSync(Admin)
 // Usage: const admin = makeAdmin({ name: "Alice" })
 // Result: { _tag: "Admin", name: "Alice" }
@@ -834,7 +834,9 @@ export const makeAdmin = Schema.decodeSync(Admin)
 **4. Schema.annotations** - Self-documenting schemas
 
 ```typescript
-Schema.TaggedStruct("Admin", { /* fields */ }).pipe(
+import { Schema } from "effect"
+
+Schema.TaggedStruct("Admin", { name: Schema.String }).pipe(
   Schema.annotations({
     identifier: "Admin",
     title: "Administrator",
@@ -846,31 +848,58 @@ Schema.TaggedStruct("Admin", { /* fields */ }).pipe(
 **5. Order.mapInput** - Compose orders
 
 ```typescript
+import * as Order from "effect/Order"
+
+type User = { name: string }
+
 Order.mapInput(Order.string, (user: User) => user.name)
 ```
 
 **6. Order.combine** - Multi-criteria sorting
 
 ```typescript
+import * as Order from "effect/Order"
+
+declare const OrderByName: Order.Order<any>
+declare const OrderByAge: Order.Order<any>
+
 Order.combine(OrderByName, OrderByAge)
 ```
 
 **7. Schema.suspend** - Recursive types
 
 ```typescript
+import { Schema } from "effect"
+
+type Category = { subcategories: ReadonlyArray<Category> }
+declare const Category: Schema.Schema<Category>
+
 Schema.suspend((): Schema.Schema<Category> => Category)
 ```
 
 **8. Match.typeTags** - Pattern matching
 
 ```typescript
-const match = Match.typeTags<User, string>()
-const result = match({ Admin: (u) => "admin", Customer: (u) => "customer" })
+import * as Match from "effect/Match"
+
+type User = { _tag: "Admin" } | { _tag: "Customer" }
+declare const user: User
+
+const match = Match.typeTags<User>()
+const getRole = match({
+  Admin: (u) => "admin",
+  Customer: (u) => "customer"
+})
+const result = getRole(user)
 ```
 
 **9. Equivalence.mapInput** - Field-based equality
 
 ```typescript
+import * as Equivalence from "effect/Equivalence"
+
+type User = { id: string }
+
 Equivalence.mapInput(Equivalence.string, (user: User) => user.id)
 ```
 

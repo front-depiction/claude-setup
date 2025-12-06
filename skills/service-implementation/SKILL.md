@@ -10,6 +10,8 @@ Design and implement Effect services as focused capabilities that compose into c
 ## Anti-Pattern: Monolithic Services
 
 ```typescript
+import { Context, Effect } from "effect"
+
 // ❌ WRONG - Mixed concerns in one service
 export class PaymentService extends Context.Tag("PaymentService")<
   PaymentService,
@@ -28,6 +30,47 @@ export class PaymentService extends Context.Tag("PaymentService")<
 Each service represents ONE cohesive capability:
 
 ```typescript
+import { Context, Effect } from "effect"
+
+declare const Doc: unique symbol
+type Doc<T extends string> = { readonly [Doc]: T }
+
+interface HandoffResult {
+  readonly status: string
+}
+
+interface HandoffError {
+  readonly _tag: "HandoffError"
+  readonly message: string
+}
+
+interface WebhookPayload {
+  readonly signature: string
+  readonly data: unknown
+}
+
+interface WebhookValidationError {
+  readonly _tag: "WebhookValidationError"
+  readonly message: string
+}
+
+interface PaymentId {
+  readonly value: string
+}
+
+interface Cents {
+  readonly value: number
+}
+
+interface RefundResult {
+  readonly status: string
+}
+
+interface RefundError {
+  readonly _tag: "RefundError"
+  readonly message: string
+}
+
 // ✅ CORRECT - Focused capabilities
 
 export class PaymentGateway extends Context.Tag(
@@ -72,6 +115,17 @@ export class PaymentRefundGateway extends Context.Tag(
 Service operations should **never** have requirements:
 
 ```typescript
+import { Context, Effect } from "effect"
+
+interface QueryResult {
+  readonly rows: ReadonlyArray<unknown>
+}
+
+interface QueryError {
+  readonly _tag: "QueryError"
+  readonly message: string
+}
+
 // The service interface stays clean
 export class Database extends Context.Tag("Database")<
   Database,
@@ -88,6 +142,43 @@ export class Database extends Context.Tag("Database")<
 Dependencies are handled during **layer construction**, not in the service interface:
 
 ```typescript
+import { Context, Effect, Layer } from "effect"
+
+declare const Database: Context.Tag<
+  Database,
+  {
+    readonly query: (sql: string) => Effect.Effect<QueryResult, QueryError, never>
+  }
+>
+
+declare const Config: Context.Tag<
+  Config,
+  {
+    readonly getConfig: Effect.Effect<{ connection: string }>
+  }
+>
+
+declare const Logger: Context.Tag<
+  Logger,
+  {
+    readonly log: (message: string) => Effect.Effect<void>
+  }
+>
+
+interface QueryResult {
+  readonly rows: ReadonlyArray<unknown>
+}
+
+interface QueryError {
+  readonly _tag: "QueryError"
+  readonly message: string
+}
+
+declare function executeQuery(
+  connection: string,
+  sql: string
+): Effect.Effect<QueryResult, QueryError>
+
 // Dependencies live in the layer
 export const DatabaseLive = Layer.effect(
   Database,
@@ -112,6 +203,18 @@ export const DatabaseLive = Layer.effect(
 Different implementations support different capabilities:
 
 ```typescript
+import { Layer } from "effect"
+
+declare const PaymentGateway: {
+  of: (impl: { handoff: (intent: any) => any }) => any
+}
+
+declare const StripeHandoffLive: Layer.Layer<any>
+declare const StripeWebhookLive: Layer.Layer<any>
+declare const StripeRefundLive: Layer.Layer<any>
+
+declare function fulfillCashPayment(intent: any): any
+
 // Cash payments: Basic handoff only
 export const CashGatewayLive = Layer.succeed(
   PaymentGateway,
@@ -133,6 +236,26 @@ export const StripeGatewayLive = Layer.mergeAll(
 Use `Effect.serviceOption` for capabilities that may not be available:
 
 ```typescript
+import { Effect, Option } from "effect"
+
+declare const PaymentGateway: {
+  handoff: (intent: any) => Effect.Effect<any>
+}
+
+declare const PaymentRefundGateway: {
+  refund: (paymentId: any, amount: any) => Effect.Effect<any>
+}
+
+interface Order {
+  readonly paymentIntent: any
+  readonly id: string
+}
+
+declare function setupRefundPolicy(
+  gateway: typeof PaymentRefundGateway,
+  order: Order
+): Effect.Effect<void>
+
 const processPayment = (order: Order) =>
   Effect.gen(function* () {
     const handoff = yield* PaymentGateway
@@ -154,6 +277,28 @@ const processPayment = (order: Order) =>
 Each capability can be tested in isolation:
 
 ```typescript
+import { Effect, Layer, pipe } from "effect"
+
+declare const PaymentWebhookGateway: {
+  of: (impl: {
+    validateWebhook: (payload: WebhookPayload) => Effect.Effect<void, WebhookValidationError>
+  }) => any
+}
+
+interface WebhookPayload {
+  readonly signature: string
+  readonly data: unknown
+}
+
+interface WebhookValidationError {
+  readonly _tag: "WebhookValidationError"
+  readonly reason: string
+}
+
+declare function handleWebhook(payload: WebhookPayload): Effect.Effect<void, WebhookValidationError, any>
+
+declare const payload: WebhookPayload
+
 const TestWebhook = Layer.succeed(
   PaymentWebhookGateway,
   PaymentWebhookGateway.of({

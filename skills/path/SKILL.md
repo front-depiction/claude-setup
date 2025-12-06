@@ -11,15 +11,25 @@ import { Path } from "@effect/platform"
 ## Service Injection
 
 ```typescript
-const path = yield* Path.Path
+import { Path } from "@effect/platform"
+import { Effect } from "effect"
+
+const program = Effect.gen(function* () {
+  const path = yield* Path.Path
+})
 ```
 
 ## Path Separator
 
 ```typescript
+import { Path } from "@effect/platform"
+import { Effect } from "effect"
+
 // Get platform-specific separator
-const path = yield* Path.Path
-const separator = path.sep // "/" on Unix, "\" on Windows
+const program = Effect.gen(function* () {
+  const path = yield* Path.Path
+  const separator = path.sep // "/" on Unix, "\" on Windows
+})
 ```
 
 ## Path Operations
@@ -27,98 +37,148 @@ const separator = path.sep // "/" on Unix, "\" on Windows
 ### join - Combine path segments
 
 ```typescript
-const path = yield* Path.Path
-const fullPath = path.join("src", "components", "Button.tsx")
-// "src/components/Button.tsx" on Unix
-// "src\components\Button.tsx" on Windows
+import { Path } from "@effect/platform"
+import { Effect } from "effect"
+
+const program = Effect.gen(function* () {
+  const path = yield* Path.Path
+  const fullPath = path.join("src", "components", "Button.tsx")
+  // "src/components/Button.tsx" on Unix
+  // "src\components\Button.tsx" on Windows
+})
 ```
 
 ### resolve - Convert to absolute path
 
 ```typescript
-const path = yield* Path.Path
-const absolutePath = path.resolve("src", "index.ts")
-// "/Users/username/project/src/index.ts" on Unix
-// "C:\Users\username\project\src\index.ts" on Windows
+import { Path } from "@effect/platform"
+import { Effect } from "effect"
+
+const program = Effect.gen(function* () {
+  const path = yield* Path.Path
+  const absolutePath = path.resolve("src", "index.ts")
+  // "/Users/username/project/src/index.ts" on Unix
+  // "C:\Users\username\project\src\index.ts" on Windows
+})
 ```
 
 ### normalize - Clean up path
 
 ```typescript
-const path = yield* Path.Path
-const clean = path.normalize("/foo/bar//baz/asdf/quux/..")
-// "/foo/bar/baz/asdf"
+import { Path } from "@effect/platform"
+import { Effect } from "effect"
+
+const program = Effect.gen(function* () {
+  const path = yield* Path.Path
+  const clean = path.normalize("/foo/bar//baz/asdf/quux/..")
+  // "/foo/bar/baz/asdf"
+})
 ```
 
 ### dirname - Get directory portion
 
 ```typescript
-const path = yield* Path.Path
-const dir = path.dirname("/foo/bar/baz.txt")
-// "/foo/bar"
+import { Path } from "@effect/platform"
+import { Effect } from "effect"
+
+const program = Effect.gen(function* () {
+  const path = yield* Path.Path
+  const dir = path.dirname("/foo/bar/baz.txt")
+  // "/foo/bar"
+})
 ```
 
 ### basename - Get file name
 
 ```typescript
-const path = yield* Path.Path
-const name = path.basename("/foo/bar/baz.txt")
-// "baz.txt"
+import { Path } from "@effect/platform"
+import { Effect } from "effect"
 
-const nameWithoutExt = path.basename("/foo/bar/baz.txt", ".txt")
-// "baz"
+const program = Effect.gen(function* () {
+  const path = yield* Path.Path
+  const name = path.basename("/foo/bar/baz.txt")
+  // "baz.txt"
+
+  const nameWithoutExt = path.basename("/foo/bar/baz.txt", ".txt")
+  // "baz"
+})
 ```
 
 ### extname - Get file extension
 
 ```typescript
-const path = yield* Path.Path
-const ext = path.extname("/foo/bar/baz.txt")
-// ".txt"
+import { Path } from "@effect/platform"
+import { Effect } from "effect"
+
+const program = Effect.gen(function* () {
+  const path = yield* Path.Path
+  const ext = path.extname("/foo/bar/baz.txt")
+  // ".txt"
+})
 ```
 
 ### parse - Decompose path into components
 
 ```typescript
-const path = yield* Path.Path
-const parsed = path.parse("/home/user/dir/file.txt")
-// {
-//   root: "/",
-//   dir: "/home/user/dir",
-//   base: "file.txt",
-//   ext: ".txt",
-//   name: "file"
-// }
+import { Path } from "@effect/platform"
+import { Effect } from "effect"
+
+const program = Effect.gen(function* () {
+  const path = yield* Path.Path
+  const parsed = path.parse("/home/user/dir/file.txt")
+  // {
+  //   root: "/",
+  //   dir: "/home/user/dir",
+  //   base: "file.txt",
+  //   ext: ".txt",
+  //   name: "file"
+  // }
+})
 ```
 
 ### format - Construct path from components
 
 ```typescript
-const path = yield* Path.Path
-const fullPath = path.format({
-  root: "/",
-  dir: "/home/user/dir",
-  base: "file.txt"
+import { Path } from "@effect/platform"
+import { Effect } from "effect"
+
+const program = Effect.gen(function* () {
+  const path = yield* Path.Path
+  const fullPath = path.format({
+    root: "/",
+    dir: "/home/user/dir",
+    base: "file.txt"
+  })
+  // "/home/user/dir/file.txt"
 })
-// "/home/user/dir/file.txt"
 ```
 
 ### isAbsolute - Check if path is absolute
 
 ```typescript
-const path = yield* Path.Path
-const isAbs = path.isAbsolute("/foo/bar")
-// true on Unix
-const isRel = path.isAbsolute("foo/bar")
-// false
+import { Path } from "@effect/platform"
+import { Effect } from "effect"
+
+const program = Effect.gen(function* () {
+  const path = yield* Path.Path
+  const isAbs = path.isAbsolute("/foo/bar")
+  // true on Unix
+  const isRel = path.isAbsolute("foo/bar")
+  // false
+})
 ```
 
 ### relative - Get relative path
 
 ```typescript
-const path = yield* Path.Path
-const relPath = path.relative("/data/orandea/test/aaa", "/data/orandea/impl/bbb")
-// "../../impl/bbb"
+import { Path } from "@effect/platform"
+import { Effect } from "effect"
+
+const program = Effect.gen(function* () {
+  const path = yield* Path.Path
+  const relPath = path.relative("/data/orandea/test/aaa", "/data/orandea/impl/bbb")
+  // "../../impl/bbb"
+})
 ```
 
 ## URL Conversions (Effectful)

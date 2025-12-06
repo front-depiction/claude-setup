@@ -28,8 +28,8 @@ const NumberFromString = Schema.NumberFromString
 
 ### Decoding vs Encoding
 
-- **Decoding**: Transform `Encoded` � `Type` (e.g., string "123" � number 123)
-- **Encoding**: Transform `Type` � `Encoded` (e.g., number 123 � string "123")
+- **Decoding**: Transform `Encoded` → `Type` (e.g., string "123" → number 123)
+- **Encoding**: Transform `Type` → `Encoded` (e.g., number 123 → string "123")
 
 Effect Schema follows "parse, don't validate" - schemas transform data into the desired format, not just check validity.
 
@@ -50,16 +50,16 @@ Schema.compose: <A, B, R1>(from: Schema<B, A, R1>) =>
 **When to Use:**
 - Multi-step transformations where each stage changes the type
 - Connecting parsing and validation steps
-- Building pipelines from `Encoded � Intermediate � Type`
+- Building pipelines from `Encoded → Intermediate → Type`
 
 **Example - Parse and Validate:**
 ```typescript
 import { Schema } from "effect"
 
-// Split string � array, then transform array � numbers
+// Split string → array, then transform array → numbers
 const schema = Schema.compose(
-  Schema.split(","),              // string � readonly string[]
-  Schema.Array(Schema.NumberFromString) // readonly string[] � readonly number[]
+  Schema.split(","),              // string → readonly string[]
+  Schema.Array(Schema.NumberFromString) // readonly string[] → readonly number[]
 )
 
 // Result: Schema<readonly number[], string, never>
@@ -68,8 +68,10 @@ console.log(Schema.decodeUnknownSync(schema)("1,2,3")) // [1, 2, 3]
 
 **Example - Boolean from String via Literal:**
 ```typescript
+import { Schema } from "effect"
+
 const BooleanFromString = Schema.compose(
-  Schema.Literal("on", "off"),  // string � "on" | "off"
+  Schema.Literal("on", "off"),  // string → "on" | "off"
   Schema.transform(
     Schema.Literal("on", "off"),
     Schema.Boolean,
@@ -87,6 +89,8 @@ const BooleanFromString = Schema.compose(
 When type boundaries don't align perfectly, use `{ strict: false }`:
 
 ```typescript
+import { Schema } from "effect"
+
 // Without strict: false, TypeScript error
 Schema.compose(
   Schema.Union(Schema.Null, Schema.Literal("0")),
@@ -119,6 +123,8 @@ const PositiveInt = Schema.Number.pipe(
 
 **Example - String Validation:**
 ```typescript
+import { Schema } from "effect"
+
 const ValidEmail = Schema.String.pipe(
   Schema.trimmed(),
   Schema.lowercased(),
@@ -133,7 +139,7 @@ const ValidEmail = Schema.String.pipe(
 |--------|---------------|-------------|
 | **Purpose** | Chain transformations | Apply refinements |
 | **Type Change** | Changes type at each stage | Type stays the same |
-| **Example** | `string � array � numbers` | `number � positive number` |
+| **Example** | `string → array → numbers` | `number → positive number` |
 | **Use Case** | Multi-step parsing | Validation constraints |
 
 ## Built-in Filters
@@ -169,6 +175,8 @@ Schema.String.pipe(Schema.uncapitalized())  // First letter lowercase
 ### Number Filters
 
 ```typescript
+import { Schema } from "effect"
+
 // Range constraints
 Schema.Number.pipe(Schema.greaterThan(5))
 Schema.Number.pipe(Schema.greaterThanOrEqualTo(5))
@@ -196,6 +204,8 @@ Schema.NonNegativeInt                     // Non-negative integer
 ### Array Filters
 
 ```typescript
+import { Schema } from "effect"
+
 Schema.Array(Schema.Number).pipe(Schema.maxItems(2))
 Schema.Array(Schema.Number).pipe(Schema.minItems(2))
 Schema.Array(Schema.Number).pipe(Schema.itemsCount(2))
@@ -204,17 +214,23 @@ Schema.Array(Schema.Number).pipe(Schema.itemsCount(2))
 ### Date Filters
 
 ```typescript
+import { Schema } from "effect"
+
+declare const now: Date
+
 Schema.DateFromSelf.pipe(Schema.validDate())  // alias: Schema.ValidDateFromSelf
-Schema.Date.pipe(Schema.greaterThanDate(new Date()))
-Schema.Date.pipe(Schema.greaterThanOrEqualToDate(new Date()))
-Schema.Date.pipe(Schema.lessThanDate(new Date()))
-Schema.Date.pipe(Schema.lessThanOrEqualToDate(new Date()))
-Schema.Date.pipe(Schema.betweenDate(new Date(0), new Date()))
+Schema.Date.pipe(Schema.greaterThanDate(now))
+Schema.Date.pipe(Schema.greaterThanOrEqualToDate(now))
+Schema.Date.pipe(Schema.lessThanDate(now))
+Schema.Date.pipe(Schema.lessThanOrEqualToDate(now))
+Schema.Date.pipe(Schema.betweenDate(new Date(0), now))
 ```
 
 ### BigInt Filters
 
 ```typescript
+import { Schema } from "effect"
+
 Schema.BigInt.pipe(Schema.greaterThanBigInt(5n))
 Schema.BigInt.pipe(Schema.greaterThanOrEqualToBigInt(5n))
 Schema.BigInt.pipe(Schema.lessThanBigInt(5n))
@@ -230,7 +246,7 @@ Schema.BigInt.pipe(Schema.nonPositiveBigInt())  // alias: Schema.NonPositiveBigI
 ### BigDecimal Filters
 
 ```typescript
-import { BigDecimal } from "effect"
+import { BigDecimal, Schema } from "effect"
 
 Schema.BigDecimal.pipe(Schema.greaterThanBigDecimal(BigDecimal.unsafeFromNumber(5)))
 Schema.BigDecimal.pipe(Schema.lessThanBigDecimal(BigDecimal.unsafeFromNumber(5)))
@@ -248,6 +264,8 @@ Schema.BigDecimal.pipe(Schema.nonPositiveBigDecimal())
 ### Duration Filters
 
 ```typescript
+import { Schema } from "effect"
+
 Schema.Duration.pipe(Schema.greaterThanDuration("5 seconds"))
 Schema.Duration.pipe(Schema.lessThanDuration("5 seconds"))
 Schema.Duration.pipe(Schema.betweenDuration("5 seconds", "10 seconds"))
@@ -285,6 +303,8 @@ The filter predicate can return:
 Add metadata to filters for better error messages:
 
 ```typescript
+import { Schema } from "effect"
+
 const LongString = Schema.String.pipe(
   Schema.filter(
     (s) => s.length >= 10 ? undefined : "a string at least 10 characters long",
@@ -326,6 +346,10 @@ const MyForm = Schema.Struct({
 Return an array of issues to report multiple errors:
 
 ```typescript
+import { Schema } from "effect"
+
+const Password = Schema.Trim.pipe(Schema.minLength(2))
+
 Schema.Struct({
   password: Password,
   confirm_password: Password,
@@ -395,7 +419,7 @@ Schema.Uncapitalize      // Uncapitalize first character
 // Parsing transformations
 Schema.split(",")        // Split string into array
 Schema.parseJson()       // Parse JSON string to unknown
-Schema.parseJson(schema) // Parse JSON with validation
+// Schema.parseJson(schema) requires a schema parameter - see Advanced Composition Patterns
 
 // Encoding transformations
 Schema.StringFromBase64        // Decode base64 to UTF-8
@@ -406,6 +430,8 @@ Schema.StringFromUriComponent  // Decode URI component to UTF-8
 
 **Example:**
 ```typescript
+import { Schema } from "effect"
+
 const decode = Schema.decodeUnknownSync(Schema.Trim)
 console.log(decode(" hello ")) // "hello"
 ```
@@ -413,21 +439,27 @@ console.log(decode(" hello ")) // "hello"
 ### Number Transformations
 
 ```typescript
+import { Schema } from "effect"
+
 // Parse numbers from strings
-Schema.NumberFromString  // "123" � 123 (supports "NaN", "Infinity", "-Infinity")
+Schema.NumberFromString  // "123" → 123 (supports "NaN", "Infinity", "-Infinity")
 ```
 
 ### Boolean Transformations
 
 ```typescript
+import { Schema } from "effect"
+
 // Transform various values to boolean
-Schema.Not  // Negation: boolean � boolean
+Schema.Not  // Negation: boolean → boolean
 ```
 
 ### Common Transformation Patterns
 
 **URL Parsing:**
 ```typescript
+import { Schema } from "effect"
+
 // Parse strings into URL objects
 const schema = Schema.URL
 Schema.decodeUnknownSync(schema)("https://example.com")
@@ -436,6 +468,8 @@ Schema.decodeUnknownSync(schema)("https://example.com")
 
 **Date Parsing:**
 ```typescript
+import { Schema } from "effect"
+
 // Parse strings into Date objects
 const schema = Schema.Date
 Schema.decodeUnknownSync(schema)("2020-01-01")
@@ -576,7 +610,11 @@ const PasswordHashing = Schema.transformOrFail(
 ```typescript
 import { Effect, Schema } from "effect"
 
-// L Verbose
+declare const self: Effect.Effect<unknown, unknown, unknown>
+declare const schema: Schema.Schema<unknown, unknown, never>
+declare const toError: (e: unknown) => unknown
+
+// ❌ Verbose
 self.pipe(
   Effect.flatMap((value) =>
     Schema.decodeUnknown(schema)(value).pipe(
@@ -585,7 +623,7 @@ self.pipe(
   )
 )
 
-//  Streamlined
+// ✅ Streamlined
 self.pipe(
   Effect.flatMap(Schema.decodeUnknown(schema)),
   Effect.mapError(toError)
@@ -597,6 +635,10 @@ self.pipe(
 Create reusable schema factories for common patterns:
 
 ```typescript
+import { Effect, Schema } from "effect"
+
+declare const toAssertionError: (e: unknown) => Error
+
 const createGreaterThanSchema = (n: number) =>
   Schema.Number.pipe(Schema.greaterThan(n))
 
@@ -613,6 +655,10 @@ export const beGreaterThan = (n: number) =>
 Define schemas once and reuse them:
 
 ```typescript
+import { Effect, Schema } from "effect"
+
+declare const toAssertionError: (e: unknown) => Error
+
 const TruthySchema = Schema.compose(Schema.BooleanFromUnknown, Schema.Literal(true))
 
 export const beTruthy = () =>
@@ -637,7 +683,7 @@ export const beTruthy = () =>
 
 **Example:**
 ```typescript
-import { Schema, Either } from "effect"
+import { Schema, Either, Effect } from "effect"
 
 const Person = Schema.Struct({
   name: Schema.String,
@@ -654,6 +700,9 @@ if (Either.isRight(result)) {
 }
 
 // Effect-based (required for async schemas)
+declare const asyncSchema: Schema.Schema<unknown, unknown, unknown>
+declare const data: unknown
+
 const asyncResult = Schema.decodeUnknown(asyncSchema)(data)
 Effect.runPromise(asyncResult).then(console.log)
 ```
@@ -670,12 +719,14 @@ Effect.runPromise(asyncResult).then(console.log)
 
 **Example:**
 ```typescript
+import { Schema } from "effect"
+
 const Person = Schema.Struct({
   name: Schema.NonEmptyString,
   age: Schema.NumberFromString
 })
 
-// Encode: number 30 � string "30"
+// Encode: number 30 → string "30"
 console.log(Schema.encodeSync(Person)({ name: "Alice", age: 30 }))
 // Output: { name: "Alice", age: "30" }
 ```
@@ -708,9 +759,21 @@ const schema = ReadonlySetFromArray(Schema.String)
 ### Multi-Stage Transformations
 
 ```typescript
+import { Schema } from "effect"
+
+const BooleanFromString = Schema.transform(
+  Schema.Literal("on", "off"),
+  Schema.Boolean,
+  {
+    strict: true,
+    decode: (s) => s === "on",
+    encode: (bool) => bool ? "on" : "off"
+  }
+)
+
 const BooleanFromNumericString = Schema.transform(
-  Schema.NumberFromString,    // string � number
-  BooleanFromString,          // "on"|"off" � boolean
+  Schema.NumberFromString,    // string → number
+  BooleanFromString,          // "on"|"off" → boolean
   {
     strict: true,
     decode: (n) => n > 0 ? "on" : "off",
@@ -761,6 +824,8 @@ const Person = Schema.Struct({
 ### Optional Fields
 
 ```typescript
+import { Schema } from "effect"
+
 const User = Schema.Struct({
   username: Schema.String,
   email: Schema.optional(Schema.String)
@@ -772,6 +837,8 @@ const User = Schema.Struct({
 ### Nullable Fields
 
 ```typescript
+import { Schema } from "effect"
+
 const Data = Schema.Struct({
   value: Schema.NullOr(Schema.String)
 })
@@ -782,6 +849,13 @@ const Data = Schema.Struct({
 ### Partial and Required
 
 ```typescript
+import { Schema } from "effect"
+
+const User = Schema.Struct({
+  username: Schema.String,
+  email: Schema.optional(Schema.String)
+})
+
 // Make all fields optional
 const PartialUser = Schema.partial(User)
 
@@ -792,6 +866,8 @@ const RequiredUser = Schema.required(PartialUser)
 ### Picking and Omitting
 
 ```typescript
+import { Schema } from "effect"
+
 const Recipe = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
@@ -805,6 +881,8 @@ const NoIDRecipe = Recipe.omit("id")
 ### Extending Structs
 
 ```typescript
+import { Schema } from "effect"
+
 const Dog = Schema.Struct({
   name: Schema.String,
   age: Schema.Number
@@ -825,6 +903,8 @@ const DogWithBreed2 = Schema.Struct({
 ### Excess Property Handling
 
 ```typescript
+import { Schema } from "effect"
+
 const person = Schema.Struct({
   name: Schema.String
 })
@@ -849,6 +929,8 @@ Schema.decodeUnknownSync(person)(
 ### Email Validation
 
 ```typescript
+import { Schema } from "effect"
+
 const Email = Schema.String.pipe(
   Schema.lowercased(),
   Schema.trimmed(),
@@ -859,6 +941,8 @@ const Email = Schema.String.pipe(
 ### UUID Validation
 
 ```typescript
+import { Schema } from "effect"
+
 const UserId = Schema.UUID.pipe(
   Schema.brand("UserId")
 )
@@ -867,6 +951,8 @@ const UserId = Schema.UUID.pipe(
 ### Clamping Numbers
 
 ```typescript
+import { Schema } from "effect"
+
 const Percentage = Schema.Number.pipe(
   Schema.between(0, 100),
   Schema.brand("Percentage")
@@ -876,18 +962,22 @@ const Percentage = Schema.Number.pipe(
 ### Template Literal Parsing
 
 ```typescript
+import { Schema } from "effect"
+
 // Parse Bearer tokens
 const AuthToken = Schema.TemplateLiteralParser(
   "Bearer ",
   Schema.String.pipe(Schema.brand("Token"))
 )
 
-// Decodes: "Bearer abc123" � ["Bearer ", "abc123"]
+// Decodes: "Bearer abc123" → ["Bearer ", "abc123"]
 ```
 
 ### Branded Types
 
 ```typescript
+import { Schema } from "effect"
+
 const PositiveInt = Schema.Number.pipe(
   Schema.int(),
   Schema.positive(),
@@ -900,6 +990,8 @@ const PositiveInt = Schema.Number.pipe(
 ### Form Validation
 
 ```typescript
+import { Schema } from "effect"
+
 const LoginForm = Schema.Struct({
   email: Schema.String.pipe(
     Schema.lowercased(),
@@ -915,6 +1007,8 @@ const LoginForm = Schema.Struct({
 ### API Response Parsing
 
 ```typescript
+import { Schema } from "effect"
+
 const User = Schema.Struct({
   id: Schema.NumberFromString,
   name: Schema.String,
