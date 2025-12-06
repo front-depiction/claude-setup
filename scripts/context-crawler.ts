@@ -233,13 +233,24 @@ const loadAllContexts = Effect.gen(function* () {
 
 /**
  * Summary mode - compact one-line-per-module, grouped by source
+ * External submodules are listed even without ai-context.md
  */
 const summaryMode = Effect.gen(function* () {
   const contexts = yield* loadAllContexts
+  const submodulePaths = yield* loadSubmodulePaths
 
   const internal = Array.filter(contexts, ctx => ctx.source === "internal")
-  const external = Array.filter(contexts, ctx => ctx.source === "external")
-  const count = Array.length(contexts)
+  const externalWithContext = Array.filter(contexts, ctx => ctx.source === "external")
+
+  // Get submodule paths that don't have ai-context.md (no summary)
+  const externalPaths = new Set(externalWithContext.map(ctx => ctx.path))
+  const externalWithoutContext = pipe(
+    submodulePaths,
+    Array.filter(path => !externalPaths.has(path))
+  )
+
+  const totalExternal = Array.length(externalWithContext) + Array.length(externalWithoutContext)
+  const count = Array.length(internal) + totalExternal
 
   yield* Console.log(`<modules count="${count}">`)
 
@@ -254,11 +265,19 @@ const summaryMode = Effect.gen(function* () {
     yield* Console.log("</internal>")
   }
 
-  if (Array.isNonEmptyReadonlyArray(external)) {
-    yield* Console.log(`<external count="${Array.length(external)}">`)
+  if (totalExternal > 0) {
+    yield* Console.log(`<external count="${totalExternal}">`)
+    // External with ai-context.md (have summaries)
     yield* pipe(
-      external,
+      externalWithContext,
       Array.map(ctx => Console.log(`${ctx.path}: ${ctx.summary}`)),
+      Effect.all,
+      Effect.asVoid
+    )
+    // External submodules without ai-context.md (just paths, for grepping)
+    yield* pipe(
+      externalWithoutContext,
+      Array.map(path => Console.log(`${path}: (grep for implementation details)`)),
       Effect.all,
       Effect.asVoid
     )
