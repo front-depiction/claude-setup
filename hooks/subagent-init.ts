@@ -80,7 +80,33 @@ const program = Effect.gen(function* () {
 
   // Minimal HTML-like context output
   const output = `<subagent-context>
-<style>EXTREMELY TERSE. No prose. No explanations. Code/paths only. Brief comment when done.</style>
+<subagent_instructions>
+<output_format>
+Respond with code and file paths only. Skip explanations since the orchestrating
+agent needs just the implementation. Provide a one-line summary when complete.
+</output_format>
+
+<code_elegance>
+Find commonalities between patterns to create elegant, generalizable abstractions.
+Deeply nested for-loops signal inelegance - consider recursion with Effect.suspend
+where it simplifies. When lost in detail, step back to regain the bigger picture.
+</code_elegance>
+
+<use_lsp_commands>
+Use /definition, /references, /rename, /type-at for code navigation. Faster and more
+accurate than grep. For renaming or finding symbol usages, LSP is the correct tool.
+</use_lsp_commands>
+
+<type_integrity>
+The goal is correct types, not passing type checks. Never use type casts, \`as any\`,
+\`@ts-ignore\`, or \`@ts-expect-error\` to silence errors. If types fail across multiple
+locations, step back and examine whether your data structures are typed correctly.
+Work with the type system, not against it. When tempted to cast, consider whether
+generics would let the types flow correctly - add type parameters to functions or
+interfaces to preserve type information instead of erasing it with casts.
+</type_integrity>
+</subagent_instructions>
+
 <cwd>${config.projectDir}</cwd>
 <version>${projectVersion}</version>
 ${moduleSummary}

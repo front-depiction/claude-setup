@@ -197,17 +197,26 @@ const program = Effect.gen(function* () {
 
   // 50% chance: Remind about concurrency
   if (showConcurrency < 50) {
-    parts.push(`<tip>Use parallel tool calls when operations are independent</tip>`)
+    parts.push(`<parallel_execution>
+Make all independent tool calls in parallel within a single message.
+This maximizes speed and efficiency.
+</parallel_execution>`)
   }
 
   // 50% chance: Remind about module commands
   if (showModules < 50) {
-    parts.push(`<tip>Use /modules to discover available context, /module [path] to read</tip>`)
+    parts.push(`<context_discovery>
+Use /modules to list available ai-context modules.
+Use /module [path] to read specific module content.
+</context_discovery>`)
   }
 
   // 50% chance: Remind about LSP commands
   if (showLsp < 50) {
-    parts.push(`<tip>Use /definition, /references, /type-at for code navigation</tip>`)
+    parts.push(`<code_navigation>
+Use /definition, /references, /type-at for precise code navigation.
+These are faster than grep for finding symbol usage.
+</code_navigation>`)
   }
 
   // 20% chance: Remind about version

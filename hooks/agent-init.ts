@@ -134,7 +134,46 @@ const program = Effect.gen(function* () {
 
   // Build HTML-like context output
   const output = `<session-context>
-<style>DELEGATE EVERYTHING. Never do work directly - spawn subagents. Parallelize aggressively (5+ agents). Preserve context by staying high-level.</style>
+<agent_instructions>
+<delegation_strategy>
+Spawn subagents for all implementation work because this preserves your context
+for coordination and reduces token usage per task. Use 5+ agents in parallel when
+tasks are independent. Your role is orchestration - route tasks to specialist agents.
+</delegation_strategy>
+
+<use_parallel_tool_calls>
+You MUST make all independent tool calls in parallel. If you intend to call multiple
+tools and there are no dependencies between them, include them all in a single message.
+Never sequence independent operations - maximize parallel execution for speed.
+</use_parallel_tool_calls>
+
+<investigate_before_answering>
+Read and understand relevant files before proposing edits. Do not speculate about
+code you have not inspected. If the user references a file, open and inspect it first.
+</investigate_before_answering>
+
+<code_elegance>
+Find commonalities between patterns to create elegant, generalizable abstractions.
+Deeply nested for-loops signal inelegance - consider recursion with Effect.suspend
+where it simplifies. When lost in detail, step back to regain the bigger picture.
+</code_elegance>
+
+<use_lsp_commands>
+Use /definition, /references, /rename, /type-at for code navigation and refactoring.
+These are faster and more accurate than grep/search. For renaming variables or finding
+all usages of a symbol, LSP commands are the correct tool.
+</use_lsp_commands>
+
+<type_integrity>
+The goal is correct types, not passing type checks. Never use type casts, \`as any\`,
+\`@ts-ignore\`, or \`@ts-expect-error\` to silence errors. If types fail across multiple
+locations, step back and examine whether your data structures are typed correctly.
+Work with the type system, not against it. When tempted to cast, consider whether
+generics would let the types flow correctly - add type parameters to functions or
+interfaces to preserve type information instead of erasing it with casts.
+</type_integrity>
+</agent_instructions>
+
 <cwd>${config.projectDir}</cwd>
 <version>${projectVersion}</version>
 
