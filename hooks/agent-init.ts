@@ -99,7 +99,7 @@ const program = Effect.gen(function* () {
   const structureCapture = yield* ProjectStructureCapture
 
   // Capture all context in parallel
-  const [treeOutput, gitStatus, gitLog, moduleSummary, projectVersion] = yield* Effect.all([
+  const [treeOutput, gitStatus, latestCommit, previousCommits, branchContext, githubIssues, githubPRs, moduleSummary, projectVersion] = yield* Effect.all([
     structureCapture.capture(),
     pipe(
       Command.make("git", "status", "--short"),
@@ -108,11 +108,56 @@ const program = Effect.gen(function* () {
       Effect.catchAll(() => Effect.succeed("(not a git repository)")),
       Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
     ),
+    // Latest commit: full details with body and files touched
     pipe(
-      Command.make("git", "log", "--oneline", "-5"),
+      Command.make("git", "show", "HEAD", "--stat", "--format=%h %s%n%n%b"),
       Command.workingDirectory(config.projectDir),
       Command.string,
-      Effect.catchAll(() => Effect.succeed("(no git history)")),
+      Effect.map(s => s.trim()),
+      Effect.catchAll(() => Effect.succeed("")),
+      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+    ),
+    // Previous commits: one-line summaries
+    pipe(
+      Command.make("git", "log", "--oneline", "-4", "--skip=1"),
+      Command.workingDirectory(config.projectDir),
+      Command.string,
+      Effect.map(s => s.trim()),
+      Effect.catchAll(() => Effect.succeed("")),
+      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+    ),
+    // Branch context: current branch with tracking info
+    pipe(
+      Command.make("git", "branch", "-vv", "--list", "--sort=-committerdate"),
+      Command.workingDirectory(config.projectDir),
+      Command.string,
+      Effect.map(s => {
+        const lines = s.trim().split("\n")
+        const current = lines.find(l => l.startsWith("*")) || ""
+        const recent = lines.filter(l => !l.startsWith("*")).slice(0, 4)
+        return { current: current.replace(/^\*\s*/, "").trim(), recent }
+      }),
+      Effect.catchAll((): Effect.Effect<{ current: string; recent: string[] }> =>
+        Effect.succeed({ current: "", recent: [] })
+      ),
+      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+    ),
+    // GitHub issues: recent open issues (limit 5, sorted by update)
+    pipe(
+      Command.make("gh", "issue", "list", "--limit", "5", "--state", "open", "--sort", "updated"),
+      Command.workingDirectory(config.projectDir),
+      Command.string,
+      Effect.map(s => s.trim()),
+      Effect.catchAll(() => Effect.succeed("")),
+      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+    ),
+    // GitHub PRs: recent open PRs (limit 5, sorted by update)
+    pipe(
+      Command.make("gh", "pr", "list", "--limit", "5", "--state", "open", "--sort", "updated"),
+      Command.workingDirectory(config.projectDir),
+      Command.string,
+      Effect.map(s => s.trim()),
+      Effect.catchAll(() => Effect.succeed("")),
       Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
     ),
     pipe(
@@ -186,10 +231,30 @@ ${gitStatus || "(clean)"}
 </git-status>
 
 <git-log>
-${gitLog || "(none)"}
+<latest-commit>
+${latestCommit || "(none)"}
+</latest-commit>
+
+<previous-commits>
+${previousCommits || "(none)"}
+</previous-commits>
 </git-log>
 
+<branch-context>
+<current>${branchContext.current || "(detached)"}</current>
+${branchContext.recent.length > 0 ? `<recent>\n${branchContext.recent.join("\n")}\n</recent>` : ""}
+</branch-context>
+
+<github-context>
+${githubIssues ? `<open-issues>\n${githubIssues}\n</open-issues>` : "<open-issues>(none)</open-issues>"}
+${githubPRs ? `<open-prs>\n${githubPRs}\n</open-prs>` : "<open-prs>(none)</open-prs>"}
+</github-context>
+
 ${moduleSummary}
+<module-discovery>
+Run /module [path] to get full context for any module listed above.
+Run /module-search [pattern] to find modules by keyword.
+</module-discovery>
 
 <available-commands>
 <command name="/modules">List all ai-context modules with summaries</command>

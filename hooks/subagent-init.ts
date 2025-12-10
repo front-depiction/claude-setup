@@ -60,7 +60,7 @@ const program = Effect.gen(function* () {
   const config = yield* AgentConfig
   const commandExecutor = yield* CommandExecutor.CommandExecutor
 
-  const [moduleSummary, projectVersion] = yield* Effect.all([
+  const [moduleSummary, projectVersion, latestCommit, previousCommits] = yield* Effect.all([
     pipe(
       Command.make("bun", ".claude/scripts/context-crawler.ts", "--summary"),
       Command.workingDirectory(config.projectDir),
@@ -74,6 +74,24 @@ const program = Effect.gen(function* () {
       Command.string,
       Effect.map(v => v.trim()),
       Effect.catchAll(() => Effect.succeed("unknown")),
+      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+    ),
+    // Latest commit: full details with body and files touched
+    pipe(
+      Command.make("git", "show", "HEAD", "--stat", "--format=%h %s%n%n%b"),
+      Command.workingDirectory(config.projectDir),
+      Command.string,
+      Effect.map(s => s.trim()),
+      Effect.catchAll(() => Effect.succeed("")),
+      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+    ),
+    // Previous commits: one-line summaries
+    pipe(
+      Command.make("git", "log", "--oneline", "-4", "--skip=1"),
+      Command.workingDirectory(config.projectDir),
+      Command.string,
+      Effect.map(s => s.trim()),
+      Effect.catchAll(() => Effect.succeed("")),
       Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
     )
   ], { concurrency: "unbounded" })
@@ -109,7 +127,23 @@ interfaces to preserve type information instead of erasing it with casts.
 
 <cwd>${config.projectDir}</cwd>
 <version>${projectVersion}</version>
+
+<git-log>
+<latest-commit>
+${latestCommit || "(none)"}
+</latest-commit>
+
+<previous-commits>
+${previousCommits || "(none)"}
+</previous-commits>
+</git-log>
+
 ${moduleSummary}
+<module-discovery>
+Run /module [path] to get full context for any module listed above.
+Run /module-search [pattern] to find modules by keyword.
+</module-discovery>
+
 <commands>/modules /module [path] /module-search [pattern] /definition /references /type-at</commands>
 </subagent-context>`
 
