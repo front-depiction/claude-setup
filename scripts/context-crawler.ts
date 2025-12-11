@@ -57,7 +57,7 @@ const extractFirstParagraph = (content: string): Option.Option<string> => {
     lines,
     Array.findFirst(line => {
       const trimmed = String.trim(line)
-      return String.isNonEmpty(trimmed) && !String.startsWith(trimmed, "#")
+      return String.isNonEmpty(trimmed) && !String.startsWith("#")(trimmed)
     }),
     Option.map(String.trim)
   )

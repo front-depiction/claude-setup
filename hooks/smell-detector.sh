@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# PreToolUse Hook - Code Smell Detector Wrapper
+# PostToolUse Hook - Code Smell Detector Wrapper
 #
 # This bash script wraps the Effect TypeScript implementation
-# and is called by Claude before using Edit/Write tools to detect code smells.
+# and is called by Claude after using Edit/Write tools to detect code smells.
 #
 
 set -e  # Exit on error

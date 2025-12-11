@@ -194,7 +194,7 @@ const loadSmells = Effect.gen(function* () {
   if (!exists) return Array.empty<Smell>()
 
   const entries = yield* fs.readDirectory(smellsDir)
-  const smellFiles = Array.filter(entries, entry => String.endsWith(entry, ".md"))
+  const smellFiles = Array.filter(entries, String.endsWith(".md"))
 
   const smellEffects = Array.map(smellFiles, file =>
     Effect.option(readSmellFile(path.join(smellsDir, file)))
