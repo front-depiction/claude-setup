@@ -2,7 +2,7 @@
 name: avoid-non-null-assertion
 description: Avoid using ! non-null assertion operator
 glob: "**/*.{ts,tsx}"
-pattern: \!\s*[;\.\[\(]
+pattern: [\w\)\]]\!\s*[;\.\[\(]
 tag: do-not-assert-non-null
 severity: warning
 ---

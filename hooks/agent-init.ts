@@ -256,15 +256,6 @@ Run /module [path] to get full context for any module listed above.
 Run /module-search [pattern] to find modules by keyword.
 </module-discovery>
 
-<available-commands>
-<command name="/modules">List all ai-context modules with summaries</command>
-<command name="/module [path]">Show full content of a specific module</command>
-<command name="/module-search [pattern]">Search modules by glob pattern</command>
-<command name="/definition [file] [line] [col]">Go to symbol definition</command>
-<command name="/references [file] [line] [col]">Find symbol references</command>
-<command name="/type-at [file] [line] [col]">Get TypeScript type at position</command>
-<command name="/typecheck">Run TypeScript type checking</command>
-</available-commands>
 </session-context>`
 
   yield* Console.log(output)

@@ -14,16 +14,12 @@
     "allow": [
       "Bash(bunx tsc:*)",
       "Bash(AGENT_ID=\"test-agent\" bun run:*)",
-      "Bash(.claude/scripts/await-mailbox.sh:*)",
-      "Bash(.claude/scripts/request.sh:*)",
       "Bash(EXIT=$?)",
       "Bash(echo:*)",
       "Bash(cat:*)",
       "Edit(.claude/**/*)",
       "Write(.claude/**/*)",
-      "Bash(bun add:*)",
-      "SlashCommand(request:*)",
-      "SlashCommand(await-mailbox:*)"
+      "Bash(bun add:*)"
     ]
   },
   "hooks": {

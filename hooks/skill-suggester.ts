@@ -12,7 +12,7 @@
  * @since 1.0.0
  */
 
-import { Effect, Console, pipe, Array, Record, Option, String, Random } from "effect"
+import { Effect, Console, pipe, Array, Record, Option, String } from "effect"
 import { Terminal, FileSystem, Path, Command, CommandExecutor } from "@effect/platform"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { UserPromptInput } from "./schemas"
@@ -174,13 +174,6 @@ const program = Effect.gen(function* () {
   // Search for matching modules based on user input
   const moduleSearchResult = yield* searchModules(input.prompt, input.cwd)
 
-  // Generate random values for probabilistic reminders
-  const [showConcurrency, showModules, showLsp, showVersion] = yield* Effect.all([
-    Random.nextIntBetween(0, 100),
-    Random.nextIntBetween(0, 100),
-    Random.nextIntBetween(0, 100),
-    Random.nextIntBetween(0, 100)
-  ])
 
   // Build context parts
   const parts: string[] = []
@@ -195,43 +188,57 @@ const program = Effect.gen(function* () {
     parts.push(`<relevant-modules>\n${moduleSearchResult.value}\n</relevant-modules>`)
   }
 
-  // 50% chance: Remind about concurrency
-  if (showConcurrency < 50) {
-    parts.push(`<parallel_execution>
+  // Always: Remind about context efficiency
+  parts.push(`<context_efficiency>
+Minimize context usage by preferring Explore agents over direct file reads.
+Let subagents handle file exploration - preserve your context for coordination.
+Avoid reading files yourself unless absolutely necessary for decision-making.
+</context_efficiency>`)
+
+  // Always: Remind about delegation
+  parts.push(`<delegation_strategy>
+Delegate all implementation work to subagents. Your role is coordination only.
+Identify independent tasks and spawn 5+ parallel agents when possible.
+Structure work for maximal parallelism - never implement directly.
+</delegation_strategy>`)
+
+  // Always: Delegation prompting guidance
+  parts.push(`<delegation_prompts>
+When prompting subagents, include clear WHAT and HOW at a high level.
+Direct agents to check /modules and .context/ files for patterns and decisions.
+Encourage frequent /typecheck runs scoped to relevant directories (not full codebase).
+Agents should validate incrementally with LSP commands, not one massive final check.
+</delegation_prompts>`)
+
+  // Always: Remind about concurrency
+  parts.push(`<parallel_execution>
 Make all independent tool calls in parallel within a single message.
 This maximizes speed and efficiency.
 </parallel_execution>`)
-  }
 
-  // 50% chance: Remind about module commands
-  if (showModules < 50) {
-    parts.push(`<context_discovery>
+  // Always: Remind about module commands
+  parts.push(`<context_discovery>
 Use /modules to list available ai-context modules.
 Use /module [path] to read specific module content.
 </context_discovery>`)
-  }
 
-  // 50% chance: Remind about LSP commands
-  if (showLsp < 50) {
-    parts.push(`<code_navigation>
+  // Always: Remind about LSP commands
+  parts.push(`<code_navigation>
 Use /definition, /references, /type-at for precise code navigation.
 These are faster than grep for finding symbol usage.
 </code_navigation>`)
-  }
 
-  // 20% chance: Remind about version
-  if (showVersion < 20) {
-    const commandExecutor = yield* CommandExecutor.CommandExecutor
-    const version = yield* pipe(
-      Command.make("bun", "-e", "console.log(require('./package.json').version)"),
-      Command.workingDirectory(input.cwd),
-      Command.string,
-      Effect.map(v => v.trim()),
-      Effect.catchAll(() => Effect.succeed("unknown")),
-      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
-    )
-    parts.push(`<version>${version}</version>`)
-  }
+  // Always: Show version
+  const commandExecutor = yield* CommandExecutor.CommandExecutor
+  const version = yield* pipe(
+    Command.make("bun", "-e", "console.log(require('./package.json').version)"),
+    Command.workingDirectory(input.cwd),
+    Command.string,
+    Effect.map(v => v.trim()),
+    Effect.catchAll(() => Effect.succeed("unknown")),
+    Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+  )
+  parts.push(`<version>${version}</version>`)
 
   // Only output if we have content
   if (parts.length > 0) {

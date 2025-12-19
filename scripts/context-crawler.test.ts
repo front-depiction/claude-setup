@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
-import { Effect, Option, Array, pipe, String } from "effect"
+import { Effect, Option, pipe, String } from "effect"
 import { BunContext } from "@effect/platform-bun"
-import { Command, CommandExecutor } from "@effect/platform"
+import { Command, CommandExecutor, FileSystem } from "@effect/platform"
 
 // Pure function tests - re-implement for testing since not exported
 const parseFrontmatter = (content: string): Option.Option<string> => {
@@ -282,41 +282,93 @@ This is the description.`
   })
 
   describe("CLI integration", () => {
-    // Get the repo root (parent of .claude)
-    const repoRoot = process.cwd().replace(/\/.claude$/, "")
+    // These tests run against a temporary test fixture to avoid depending on real repo structure
+    const setupFixture = Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem
+      const fixtureDir = yield* fs.makeTempDirectoryScoped()
 
-    const runCrawler = (args: string[]) =>
+      // Create directory structure
+      yield* fs.makeDirectory(`${fixtureDir}/apps/editor`, { recursive: true })
+      yield* fs.makeDirectory(`${fixtureDir}/packages/core`, { recursive: true })
+      yield* fs.makeDirectory(`${fixtureDir}/.context/external`, { recursive: true })
+
+      // Write test ai-context.md files
+      yield* fs.writeFileString(
+        `${fixtureDir}/ai-context.md`,
+        `---
+message = "Root module"
+---
+# Root
+Root content`
+      )
+      yield* fs.writeFileString(
+        `${fixtureDir}/apps/editor/ai-context.md`,
+        `## Purpose
+Editor module for editing`
+      )
+      yield* fs.writeFileString(
+        `${fixtureDir}/packages/core/ai-context.md`,
+        `# Core Package
+Core utilities`
+      )
+      yield* fs.writeFileString(
+        `${fixtureDir}/.context/external/ai-context.md`,
+        `# External
+External lib`
+      )
+
+      return fixtureDir
+    })
+
+    const runCrawlerInFixture = (args: string[]) =>
       Effect.gen(function* () {
-        const commandExecutor = yield* CommandExecutor.CommandExecutor
+        const fixtureDir = yield* setupFixture
         return yield* pipe(
-          Command.make("bun", ".claude/scripts/context-crawler.ts", ...args),
-          Command.workingDirectory(repoRoot),
-          Command.string,
-          Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+          Command.make("bun", `${process.cwd()}/scripts/context-crawler.ts`, ...args),
+          Command.workingDirectory(fixtureDir),
+          Command.string
         )
-      }).pipe(Effect.provide(BunContext.layer))
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(BunContext.layer)
+      )
 
-    it("--list returns module paths", async () => {
-      const result = await Effect.runPromise(runCrawler(["--list"]))
-      expect(result).toContain(".")
-    })
+    it("--list returns module paths", () =>
+      Effect.gen(function* () {
+        const result = yield* runCrawlerInFixture(["--list"])
+        expect(result).toContain(".")
+        expect(result).toContain("apps/editor")
+        expect(result).toContain("packages/core")
+      }).pipe(Effect.runPromise)
+    )
 
-    it("--summary returns grouped modules", async () => {
-      const result = await Effect.runPromise(runCrawler(["--summary"]))
-      expect(result).toContain('<modules count="')
-      expect(result).toContain("</modules>")
-    })
+    it("--summary returns grouped modules", () =>
+      Effect.gen(function* () {
+        const result = yield* runCrawlerInFixture(["--summary"])
+        expect(result).toContain('<modules count="')
+        expect(result).toContain("</modules>")
+        expect(result).toContain("<internal")
+        // Note: .context/external is only marked external if it's in .gitmodules
+        // In this test fixture there's no .gitmodules, so all modules are internal
+      }).pipe(Effect.runPromise)
+    )
 
-    it("--search finds matching modules", async () => {
-      const result = await Effect.runPromise(runCrawler(["--search", "editor"]))
-      expect(result).toContain('<modules-search pattern="editor"')
-      expect(result).toContain("</modules-search>")
-    })
+    it("--search finds matching modules", () =>
+      Effect.gen(function* () {
+        const result = yield* runCrawlerInFixture(["--search", "editor"])
+        expect(result).toContain('<modules-search pattern="editor"')
+        expect(result).toContain("</modules-search>")
+        expect(result).toContain("apps/editor")
+      }).pipe(Effect.runPromise)
+    )
 
-    it("--module returns content without frontmatter", async () => {
-      const result = await Effect.runPromise(runCrawler(["--module", "."]))
-      expect(result).toContain('<module path=".">')
-      expect(result).not.toContain("---")
-    })
+    it("--module returns content without frontmatter", () =>
+      Effect.gen(function* () {
+        const result = yield* runCrawlerInFixture(["--module", "."])
+        expect(result).toContain('<module path=".">')
+        expect(result).toContain("Root content")
+        expect(result).not.toContain('message = "Root module"')
+      }).pipe(Effect.runPromise)
+    )
   })
 })

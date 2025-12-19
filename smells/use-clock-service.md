@@ -1,14 +1,14 @@
 ---
 name: use-clock-service
-description: Use Clock service instead of Date.now()
+description: Use Effect DateTime instead of JS Date
 glob: "**/*.{ts,tsx}"
-pattern: Date\.now\(\)
+pattern: (new Date\(|Date\.\w+\()
 tag: use-effect-clock
 severity: warning
 ---
 
-# Use Clock Service Instead of `Date.now()`
+# Use Effect DateTime Instead of JS Date
 
-Direct calls to `Date.now()` are non-deterministic and make tests flaky or impossible to write correctly. Time-based logic becomes unpredictable in tests and can't be controlled for reproducible results.
+Direct use of JavaScript's `Date` object (`new Date()`, `Date.now()`, `Date.parse()`, etc.) is non-deterministic and makes tests flaky or impossible to write correctly. Time-based logic becomes unpredictable in tests and can't be controlled for reproducible results.
 
-**Instead:** Use Effect's `Clock` service (`Clock.currentTimeMillis`, `Clock.currentTimeNanos`) or `DateTime.now` for date operations. This enables controlled time in tests via `TestClock` and proper integration with Effect's scheduling features.
+**Instead:** Use Effect's `DateTime` module for all date/time operations. For current time, use `DateTime.now` or `Clock.currentTimeMillis`. This enables controlled time in tests via `TestClock` and proper integration with Effect's scheduling features.

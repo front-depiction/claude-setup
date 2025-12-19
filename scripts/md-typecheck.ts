@@ -35,7 +35,7 @@ interface TypeError {
 // ============================================================================
 
 // Create tsconfig content (extends path will be computed at runtime)
-const createTsConfig = (tsconfigBasePath: string) => ({
+const createTsConfig = (tsconfigBasePath: string, projectRoot: string) => ({
   extends: tsconfigBasePath,
   compilerOptions: {
     noEmit: true,
@@ -43,6 +43,30 @@ const createTsConfig = (tsconfigBasePath: string) => ({
     noUnusedLocals: false,
     noUnusedParameters: false,
     strict: true,
+    baseUrl: projectRoot,
+    paths: {
+      "effect": [
+        `${projectRoot}/.claude/node_modules/effect`,
+        `${projectRoot}/node_modules/effect`,
+      ],
+      "effect/*": [
+        `${projectRoot}/.claude/node_modules/effect/*`,
+        `${projectRoot}/node_modules/effect/*`,
+      ],
+      "@effect/*": [
+        `${projectRoot}/.claude/node_modules/@effect/*`,
+        `${projectRoot}/node_modules/@effect/*`,
+      ],
+      "@effect-atom/*": [
+        `${projectRoot}/.claude/node_modules/@effect-atom/*`,
+        `${projectRoot}/node_modules/@effect-atom/*`,
+      ],
+      "@/*": [`${projectRoot}/src/*`],
+    },
+    typeRoots: [
+      `${projectRoot}/node_modules/@types`,
+      `${projectRoot}/.claude/node_modules/@types`,
+    ],
   },
   include: ["./**/*.ts", "./**/*.tsx"],
 })
@@ -158,6 +182,7 @@ const generateOutputFileName = (block: CodeBlock, path: Path.Path): string => {
 const writeCodeBlocksToOutput = (
   outputDir: string,
   tsconfigBasePath: string,
+  projectRoot: string,
   blocks: ReadonlyArray<CodeBlock>
 ): Effect.Effect<ReadonlyArray<CodeBlockLocation>, never, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
@@ -168,7 +193,7 @@ const writeCodeBlocksToOutput = (
     yield* fs.makeDirectory(outputDir, { recursive: true }).pipe(Effect.orDie)
 
     // Write tsconfig.json that extends the project's root config
-    const tsconfig = createTsConfig(tsconfigBasePath)
+    const tsconfig = createTsConfig(tsconfigBasePath, projectRoot)
     yield* fs
       .writeFileString(path.join(outputDir, "tsconfig.json"), JSON.stringify(tsconfig, null, 2))
       .pipe(Effect.orDie)
@@ -317,7 +342,7 @@ const program = Effect.gen(function* () {
   const tsconfigBasePath = path.join(projectRoot, "tsconfig.base.json")
 
   yield* Console.log(`Writing code blocks to ${outputDir}...`)
-  const locations = yield* writeCodeBlocksToOutput(outputDir, tsconfigBasePath, codeBlocks)
+  const locations = yield* writeCodeBlocksToOutput(outputDir, tsconfigBasePath, projectRoot, codeBlocks)
 
   // Step 4: Run type check using project's configuration
   yield* Console.log("Running TypeScript type-check...")

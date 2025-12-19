@@ -11,6 +11,7 @@
 import { Args, Command, Options } from "@effect/cli"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { FileSystem, Path } from "@effect/platform"
+import type { PlatformError } from "@effect/platform/Error"
 import { Array, Console, Effect, Option, pipe, String } from "effect"
 
 /**
@@ -152,42 +153,37 @@ const findContextFiles = Effect.gen(function* () {
   const repoRoot = process.cwd()
   const excludeDirs = new Set(["node_modules", ".git", "dist", ".turbo", "build"])
 
-  const searchDir = (dir: string): Effect.Effect<ReadonlyArray<string>, never, FileSystem.FileSystem | Path.Path> =>
+  const searchDir: (dir: string) => Effect.Effect<
+    Array<string>,
+    PlatformError,
+    FileSystem.FileSystem | Path.Path
+  > = (dir) =>
     Effect.gen(function* () {
       const entries = yield* Effect.orElseSucceed(
         fs.readDirectory(dir),
         () => Array.empty<string>()
       )
 
-      const results = yield* pipe(
+      return yield* pipe(
         entries,
         Array.map(entry => {
           const fullPath = path.join(dir, entry)
 
-          // Check if it's ai-context.md
           if (entry === "ai-context.md") {
             return Effect.succeed([fullPath])
           }
 
-          // Check if it's a directory to recurse into
-          return Effect.gen(function* () {
-            const stat = yield* Effect.orElseSucceed(
-              fs.stat(fullPath),
-              () => ({ type: "File" as const })
+          return fs.stat(fullPath).pipe(
+            Effect.flatMap(stat =>
+              stat.type === "Directory" && !excludeDirs.has(entry)
+                ? Effect.suspend(() => searchDir(fullPath))
+                : Effect.succeed(Array.empty<string>())
             )
-
-            if (stat.type === "Directory" && !excludeDirs.has(entry)) {
-              return yield* Effect.suspend(() => searchDir(fullPath))
-            }
-
-            return Array.empty<string>()
-          })
+          )
         }),
         Effect.all,
         Effect.map(Array.flatten)
       )
-
-      return results
     })
 
   return yield* searchDir(repoRoot)

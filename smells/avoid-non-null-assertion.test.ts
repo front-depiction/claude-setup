@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-const pattern = /!\s*[;.\[\(]/
+// Pattern requires word char, ) or ] before ! to avoid matching ! inside strings
+const pattern = /[\w\)\]]!\s*[;.\[\(]/
 
 describe("avoid-non-null-assertion smell", () => {
   it("detects non-null assertion with semicolon", () => {
@@ -37,5 +38,13 @@ describe("avoid-non-null-assertion smell", () => {
 
   it("does not match optional chaining", () => {
     expect(pattern.test("const value = obj?.prop")).toBe(false)
+  })
+
+  it("does not match ! inside glob pattern strings", () => {
+    expect(pattern.test('const glob = "**/!(*.vm).{ts,tsx}"')).toBe(false)
+  })
+
+  it("does not match ! inside regex strings", () => {
+    expect(pattern.test("const re = /!(foo)/")).toBe(false)
   })
 })
