@@ -110,11 +110,6 @@ Deeply nested for-loops signal inelegance - consider recursion with Effect.suspe
 where it simplifies. When lost in detail, step back to regain the bigger picture.
 </code_elegance>
 
-<use_lsp_commands>
-Use /definition, /references, /rename, /type-at for code navigation. Faster and more
-accurate than grep. For renaming or finding symbol usages, LSP is the correct tool.
-</use_lsp_commands>
-
 <type_integrity>
 The goal is correct types, not passing type checks. Never use type casts, \`as any\`,
 \`@ts-ignore\`, or \`@ts-expect-error\` to silence errors. If types fail across multiple
@@ -144,7 +139,7 @@ Run /module [path] to get full context for any module listed above.
 Run /module-search [pattern] to find modules by keyword.
 </module-discovery>
 
-<commands>/modules /module [path] /module-search [pattern] /definition /references /type-at</commands>
+<commands>/modules /module [path] /module-search [pattern]</commands>
 </subagent-context>`
 
   yield* Console.log(output)

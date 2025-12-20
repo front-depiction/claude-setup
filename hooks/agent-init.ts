@@ -203,12 +203,6 @@ Deeply nested for-loops signal inelegance - consider recursion with Effect.suspe
 where it simplifies. When lost in detail, step back to regain the bigger picture.
 </code_elegance>
 
-<use_lsp_commands>
-Use /definition, /references, /rename, /type-at for code navigation and refactoring.
-These are faster and more accurate than grep/search. For renaming variables or finding
-all usages of a symbol, LSP commands are the correct tool.
-</use_lsp_commands>
-
 <type_integrity>
 The goal is correct types, not passing type checks. Never use type casts, \`as any\`,
 \`@ts-ignore\`, or \`@ts-expect-error\` to silence errors. If types fail across multiple

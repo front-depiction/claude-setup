@@ -222,12 +222,6 @@ Use /modules to list available ai-context modules.
 Use /module [path] to read specific module content.
 </context_discovery>`)
 
-  // Always: Remind about LSP commands
-  parts.push(`<code_navigation>
-Use /definition, /references, /type-at for precise code navigation.
-These are faster than grep for finding symbol usage.
-</code_navigation>`)
-
   // Always: Show version
   const commandExecutor = yield* CommandExecutor.CommandExecutor
   const version = yield* pipe(

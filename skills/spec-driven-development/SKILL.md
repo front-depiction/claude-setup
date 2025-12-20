@@ -5,7 +5,7 @@ description: Implement the complete spec-driven development workflow from instru
 
 # Spec-Driven Development
 
-A rigorous five-phase workflow that captures requirements, designs solutions, and plans implementations before writing code. This approach ensures alignment, reduces rework, and creates living documentation.
+A rigorous six-phase workflow that captures requirements, designs solutions, defines behavioral contracts through tests, and plans implementations before writing code. This approach ensures alignment, reduces rework, and creates living documentation.
 
 ## Critical Rule
 
@@ -43,7 +43,8 @@ specs/
      instructions.md            # Phase 1: Raw requirements
      requirements.md            # Phase 2: Structured requirements
      design.md                  # Phase 3: Technical design
-     plan.md                    # Phase 4: Implementation plan
+     behaviors.test.ts          # Phase 4: Behavioral tests (executable specs)
+     plan.md                    # Phase 5: Implementation plan
 ```
 
 The `specs/README.md` maintains a simple checkbox list of all features:
@@ -56,7 +57,7 @@ The `specs/README.md` maintains a simple checkbox list of all features:
 - [ ] **[data-sync](./data-sync/)** - Real-time data synchronization
 ```
 
-## Five-Phase Workflow
+## Six-Phase Workflow
 
 ### Phase 1: Capture Instructions
 
@@ -244,12 +245,7 @@ export interface DataModel {
 
 [High-level description of the solution]
 
-```text
-   Component A
-        ↓
-        ↓
-   Component B
-```
+Data flow: `ComponentA → ComponentB → ComponentC` (use `→` for dependencies, `||` for parallel)
 
 ## Architecture Decisions
 
@@ -334,12 +330,7 @@ export interface Input extends Schema.Schema.Type<typeof InputSchema> {}
 ### Layers
 
 ```typescript
-// Layer dependencies
-// FeatureServiceLive
-//     ├─ RepositoryServiceLive
-//     │   └─ DatabaseLive
-//     └─ ValidationServiceLive
-//         └─ ConfigLive
+// Layer dependencies: FeatureServiceLive → {RepositoryServiceLive → DatabaseLive, ValidationServiceLive → ConfigLive}
 ```
 
 ### Error Handling
@@ -405,16 +396,14 @@ const updates: Stream.Stream<Update, CustomError, Deps> =
 
 ## Component Structure
 
-### Files
+Structure files for parallel implementation: one file = one task, interface separate from implementation.
 
-```
-src/
- FeatureService.ts          # Main service
- FeatureRepository.ts       # Data access
- FeatureSchema.ts           # Schemas and types
- FeatureError.ts            # Error definitions
- FeatureService.test.ts     # Tests
-```
+**File mapping by phase**:
+- P1 (interfaces): `{Schema.ts, Error.ts, Service.ts, Repository.ts}`
+- P2 (implementations): `{ServiceLive.ts, RepositoryLive.ts, Validation.ts}`
+- P3 (tests): `{Service.test.ts, Repository.test.ts, Validation.test.ts}`
+
+Execution: `P1 ; P2 ; P3` — interfaces first enables parallel implementation against stable types.
 
 ### Dependencies
 
@@ -506,211 +495,149 @@ describe("FeatureService", () => {
 
 **After completion**:
 1. Present design to user
-2. Ask: "Does this design meet your expectations? Should I proceed to Phase 4 (Plan)?"
+2. Ask: "Does this design meet your expectations? Should I proceed to Phase 4 (Behavioral Tests)?"
 3. **STOP and wait for approval**
 
 ---
 
-### Phase 4: Generate Plan
+### Phase 4: Define Behavioral Tests
 
 **REQUIRES APPROVAL FROM PHASE 3**
 
-**Goal**: Break down implementation into concrete, ordered tasks.
+**Goal**: Write tests that serve as executable specifications of expected behavior.
+
+**Create**: `specs/[feature-name]/behaviors.test.ts`
+
+**Philosophy**:
+Tests are behavioral interfaces. They define the API surface and expected behaviors more precisely than prose. Unlike text descriptions, tests:
+- Are executable specifications that can be incrementally implemented
+- Define the exact API surface users will interact with
+- Force concrete thinking about inputs, outputs, and edge cases
+- Become passing tests as implementation progresses
+- Serve as permanent, verifiable documentation
+
+**Important**: These tests are NOT expected to run or type-check initially. They are written to define behavior, not to pass. Use `declare` statements for types/services that don't exist yet, and `Layer.mock` for partial layer implementations. The focus is clarity of intent, not correctness of implementation.
+
+**Contents**:
+- Happy path tests for each major operation
+- Error scenario tests (what errors should occur when)
+- Edge case tests (boundaries, empty inputs, limits)
+- Integration behavior tests (how components interact)
+
+**Guidelines**:
+
+1. **Use `declare`** for all types, services, and layers that don't exist yet
+2. **Use `Layer.mock`** for incremental test layer implementation:
+   - `Layer.mock(Tag, { method: impl })` creates a type-safe partial implementation
+   - Only implement the methods needed for current tests
+   - Unimplemented methods throw "not implemented" errors at runtime
+   - Add method implementations incrementally as you write more tests
+   - This enables layer creation using partials without type errors
+3. **Focus on behavior, not implementation** - describe what should happen, not how
+4. **Cover the essential paths**:
+   - Happy path (normal successful operation)
+   - Validation failures (bad input)
+   - Business rule violations (constraints, conflicts)
+   - Not found scenarios
+   - Edge cases specific to the domain
+5. **Keep tests readable** - they serve as documentation for future implementers
+6. **Don't over-specify** - test observable behavior, not internal details
+
+**Ask Questions**: Use `AskUserQuestion` if:
+- Expected behavior for edge cases is unclear
+- Error handling semantics need clarification
+- There are multiple valid ways to handle a scenario
+- Business rules need user input
+
+**After completion**:
+1. Present behavioral tests to user
+2. Ask: "Do these tests accurately capture the expected behaviors? Should I proceed to Phase 5 (Plan)?"
+3. **STOP and wait for approval**
+
+---
+
+### Phase 5: Generate Plan
+
+**REQUIRES APPROVAL FROM PHASE 4**
+
+**Goal**: Break down implementation into concrete, ordered tasks optimized for parallel agent execution.
 
 **Create**: `specs/[feature-name]/plan.md`
 
-**Contents**:
-- Task breakdown (specific, actionable items)
-- Development phases (logical grouping)
-- Dependencies between tasks
-- Progress tracking structure
-- Testing checkpoints
-- Validation steps
+**Critical: Parallel Decomposition**
+
+Tasks must be structured for concurrent agent execution. Use standard notation:
+- `A || B` — A and B execute in parallel (no file overlap)
+- `A ; B` — A completes before B starts (dependency)
+- `{T1, T2, T3}` — task set (all parallel within set)
+
+**Execution model**: `Phase1 ; Phase2 ; Phase3` where each phase is `{T1 || T2 || ... || Tn}`
+
+**Constraints**:
+- File isolation: `∀ Ti, Tj ∈ Phase: files(Ti) ∩ files(Tj) = ∅`
+- Interface-first: Phase 1 defines interfaces, Phase 2+ implements against them
+- One file = one task (split further if task spans multiple files)
+- Target |Phase| ≥ 5 tasks for maximum parallelism
+
+**Contents**: Task sets per phase, file ownership per task, phase dependencies, validation commands
 
 **Template**:
 
 ```markdown
 # [Feature Name] - Implementation Plan
 
-## Overview
+## Execution Structure
 
-[Summary of implementation approach]
+P1 ; P2 ; P3 (sequential phases, parallel tasks within each)
 
-**Estimated Effort**: [Time estimate]
-**Phases**: [Number of phases]
+## Phase 1: Interfaces {T1.1 || T1.2 || T1.3 || T1.4}
 
-## Phase 1: Foundation
+- T1.1: `FeatureSchema.ts` — domain types
+- T1.2: `FeatureError.ts` — error types
+- T1.3: `FeatureService.ts` — service interface + Tag
+- T1.4: `FeatureRepository.ts` — repository interface + Tag
 
-### Task 1.1: Define schemas and types
-- [ ] Create `FeatureSchema.ts`
-- [ ] Define input/output schemas
-- [ ] Define error types
-- [ ] Export type aliases
+Gate: typechecks pass
 
-**Files**: `src/FeatureSchema.ts`, `src/FeatureError.ts`
-**Dependencies**: None
-**Validation**: `bun run typecheck`
+## Phase 2: Implementations {T2.1 || T2.2 || T2.3}
 
-### Task 1.2: Create service interface
-- [ ] Define `FeatureService` interface
-- [ ] Add JSDoc documentation
-- [ ] Create Context.Tag
+- T2.1: `FeatureRepositoryLive.ts` — implements FeatureRepository
+- T2.2: `FeatureServiceLive.ts` — implements FeatureService
+- T2.3: `FeatureValidation.ts` — validation functions
 
-**Files**: `src/FeatureService.ts`
-**Dependencies**: Task 1.1
-**Validation**: `bun run typecheck`
+Gate: typechecks pass
 
-## Phase 2: Implementation
+## Phase 3: Tests {T3.1 || T3.2 || T3.3}
 
-### Task 2.1: Implement repository layer
-- [ ] Create `FeatureRepository.ts`
-- [ ] Implement data access methods
-- [ ] Add error handling
-- [ ] Create Live layer
+- T3.1: `FeatureRepository.test.ts`
+- T3.2: `FeatureService.test.ts`
+- T3.3: `FeatureValidation.test.ts`
 
-**Files**: `src/FeatureRepository.ts`
-**Dependencies**: Task 1.1, 1.2
-**Validation**: `bun run typecheck && bun test FeatureRepository.test.ts`
-
-### Task 2.2: Implement service
-- [ ] Create service implementation
-- [ ] Add business logic
-- [ ] Implement error recovery
-- [ ] Create Live layer
-
-**Files**: `src/FeatureService.ts`
-**Dependencies**: Task 2.1
-**Validation**: `bun run typecheck && bun test FeatureService.test.ts`
-
-## Phase 3: Testing
-
-### Task 3.1: Unit tests
-- [ ] Test schema validation
-- [ ] Test service methods
-- [ ] Test error scenarios
-- [ ] Test edge cases
-
-**Files**: `src/FeatureService.test.ts`
-**Dependencies**: Task 2.2
-**Validation**: `bun test`
-
-### Task 3.2: Integration tests
-- [ ] Test with live dependencies
-- [ ] Test concurrent scenarios
-- [ ] Test performance benchmarks
-
-**Files**: `src/FeatureService.integration.test.ts`
-**Dependencies**: Task 3.1
-**Validation**: `bun test`
-
-## Phase 4: Integration
-
-### Task 4.1: Wire into application
-- [ ] Export from main module
-- [ ] Add to application layer
-- [ ] Update documentation
-
-**Files**: `src/index.ts`, `README.md`
-**Dependencies**: Task 3.2
-**Validation**: `bun run typecheck && bun test && bun run format`
-
-### Task 4.2: Update examples
-- [ ] Create usage example
-- [ ] Add to examples directory
-- [ ] Test example code
-
-**Files**: `examples/feature-example.ts`
-**Dependencies**: Task 4.1
-**Validation**: `bun run examples/feature-example.ts`
-
-## Quality Gates
-
-After each phase:
-- [ ] All files type-check: `bun run typecheck`
-- [ ] All tests pass: `bun test`
-- [ ] Code is formatted: `bun run format`
-- [ ] No linting errors: `bun run lint` (if configured)
-
-## Progress Tracking
-
-Update this section as tasks complete:
-
-- **Phase 1**: ⬜ Not started | 🔄 In progress | ✅ Complete
-- **Phase 2**: ⬜ Not started | 🔄 In progress | ✅ Complete
-- **Phase 3**: ⬜ Not started | 🔄 In progress | ✅ Complete
-- **Phase 4**: ⬜ Not started | 🔄 In progress | ✅ Complete
-
-## Rollback Plan
-
-If implementation encounters blockers:
-1. [Step to safely revert changes]
-2. [How to restore previous state]
-3. [What to preserve for retry]
-
-## Traceability
-
-- Implements design: [All architecture decisions]
-- Satisfies requirements: [All FR and NFR items]
-- Addresses instructions: [Original user stories]
+Gate: tests pass
 ```
 
 **After completion**:
 1. Present plan to user
-2. Ask: "Does this implementation plan look correct? Should I proceed to Phase 5 (Implementation)?"
+2. Ask: "Does this implementation plan look correct? Should I proceed to Phase 6 (Implementation)?"
 3. **STOP and wait for approval**
 
 ---
 
-### Phase 5: Execute Implementation
+### Phase 6: Execute Implementation
 
-**REQUIRES APPROVAL FROM PHASE 4**
+**REQUIRES APPROVAL FROM PHASE 5**
 
 **Goal**: Implement the solution exactly as planned.
 
 **No new files**: Implementation follows the plan exactly.
 
 **Process**:
-1. Follow plan.md tasks in order
-2. After EACH file created/modified:
-   - Run `bun run format && bun run typecheck`
-   - Fix any errors before proceeding
-   - Update plan.md progress markers
-3. Complete entire phase before tests
-4. Run full test suite
-5. Update plan.md with final status
+1. Execute tasks per phase following the plan
+2. After each file: format, typecheck, fix errors
+3. After each phase: run tests
+4. Update plan.md progress markers
 
-**Implementation Rules**:
-- Follow the design exactly as approved
-- Use Effect patterns as specified
-- Implement all error handling
-- Add JSDoc documentation
-- Keep commits atomic and descriptive
-
-**Quality Checks**:
-After each file:
-```bash
-bun run format && bun run typecheck
-```
-
-After each phase:
-```bash
-bun test
-```
-
-Final validation:
-```bash
-bun run format && bun run typecheck && bun test
-```
-
-**Progress Updates**:
-Update `plan.md` after each task:
-```markdown
-### Task 2.1: Implement repository layer
-- [x] Create `FeatureRepository.ts`
-- [x] Implement data access methods
-- [x] Add error handling
-- [x] Create Live layer
-```
+**Quality gates**: typechecks pass after each file, tests pass after each phase
 
 **After completion**:
 1. Present implementation summary
@@ -722,17 +649,16 @@ Update `plan.md` after each task:
 
 ## Approval Checkpoints
 
-Each phase has a mandatory checkpoint:
+Each phase requires explicit user approval before proceeding:
 
-| Phase | Checkpoint Question |
-|-------|-------------------|
-| 1 → 2 | "Does this accurately capture your requirements? Proceed to Requirements?" |
-| 2 → 3 | "Do these requirements reflect the system needs? Proceed to Design?" |
-| 3 → 4 | "Does this design meet your expectations? Proceed to Plan?" |
-| 4 → 5 | "Does this implementation plan look correct? Proceed to Implementation?" |
-| 5 → ✓ | "Implementation complete. Create PR or make changes?" |
+- 1→2: "Does this capture your requirements? Proceed to Requirements?"
+- 2→3: "Do these requirements reflect system needs? Proceed to Design?"
+- 3→4: "Does this design meet expectations? Proceed to Behavioral Tests?"
+- 4→5: "Do these tests capture expected behaviors? Proceed to Plan?"
+- 5→6: "Is this plan correct? Proceed to Implementation?"
+- 6→✓: "Implementation complete. Create PR or make changes?"
 
-**Never skip these checkpoints.** Each phase builds on the previous, and changes cascade. Getting approval early prevents costly rework.
+Never skip checkpoints—changes cascade through dependent phases.
 
 ## When to Ask Questions
 
@@ -756,13 +682,20 @@ Use the `AskUserQuestion` tool liberally throughout:
 - Decide error handling strategies
 - Resolve performance trade-offs
 
-### Phase 4 (Plan)
-- Sequence dependent tasks
-- Estimate effort
+### Phase 4 (Behavioral Tests)
+- Clarify expected behavior for edge cases
+- Determine error handling semantics
+- Resolve ambiguous business rules
+- Define success/failure criteria
+
+### Phase 5 (Plan)
+- Identify parallelization opportunities
+- Resolve file ownership conflicts between tasks
+- Sequence only truly dependent phases
 - Identify risks
 - Plan contingencies
 
-### Phase 5 (Implementation)
+### Phase 6 (Implementation)
 - Handle unexpected issues
 - Adjust for missing dependencies
 - Resolve test failures
@@ -857,7 +790,7 @@ Each specification document must:
 
 ### Skipping Phases
 **Don't**: Jump straight to implementation
-**Do**: Follow all five phases in order
+**Do**: Follow all six phases in order
 
 ### Assuming Requirements
 **Don't**: Fill in gaps with assumptions
@@ -870,6 +803,14 @@ Each specification document must:
 ### Under-planning
 **Don't**: Create vague tasks like "implement feature"
 **Do**: Break into concrete, testable subtasks
+
+### Poor Parallelization
+**Don't**: Create tasks that touch overlapping files
+**Do**: Structure tasks so each owns distinct files, enabling 5+ parallel agents
+
+### Sequential When Parallel Is Possible
+**Don't**: Chain tasks that could run concurrently (Task 2 depends on Task 1 when they touch different files)
+**Do**: Group truly independent tasks into phases that execute in parallel
 
 ### Ignoring Feedback
 **Don't**: Proceed when user requests changes
@@ -884,10 +825,10 @@ Each specification document must:
 Spec-driven development works with:
 
 - **domain-modeling**: Use when designing domain types in Phase 3
-- **service-implementation**: Apply during Phase 5 implementation
+- **service-implementation**: Apply during Phase 6 implementation
 - **layer-design**: Reference when creating layers in Phase 3
 - **typeclass-design**: Use for generic abstractions in Phase 3
-- **effect-testing**: Apply test patterns in Phase 3 and 5
+- **effect-testing**: Apply test patterns in Phase 4 (behavioral tests) and Phase 6 (implementation)
 
 ## Examples
 
@@ -895,32 +836,36 @@ Spec-driven development works with:
 - Phase 1: "Add debug logging to payment flow"
 - Phase 2: Log levels, what to log, PII handling
 - Phase 3: Logger service design, Effect integration
-- Phase 4: Update files, add logger calls, test
-- Phase 5: Implement, verify logs appear
+- Phase 4: Tests for log output, error scenarios
+- Phase 5: Update files, add logger calls
+- Phase 6: Implement, verify logs appear and tests pass
 
 ### Medium Feature: User Authentication
 - Phase 1: Login, registration, password reset stories
 - Phase 2: Security requirements, session management
 - Phase 3: Service design, token strategy, error types
-- Phase 4: Multi-phase plan (auth service, session, middleware)
-- Phase 5: Implement all components with tests
+- Phase 4: Tests for login flows, token validation, error cases
+- Phase 5: Multi-phase plan (auth service, session, middleware)
+- Phase 6: Implement all components, make tests pass
 
 ### Large Feature: Real-time Sync
 - Phase 1: Sync requirements across devices
 - Phase 2: Conflict resolution, consistency guarantees
 - Phase 3: CRDT design, stream architecture, error recovery
-- Phase 4: Phased rollout (local, network, UI integration)
-- Phase 5: Iterative implementation with progress updates
+- Phase 4: Tests for conflict scenarios, sync behaviors, edge cases
+- Phase 5: Phased rollout (local, network, UI integration)
+- Phase 6: Iterative implementation with progress updates
 
 ## Success Criteria
 
 A successful spec-driven development cycle:
 
 1. **Alignment**: Final implementation matches original user intent
-2. **Quality**: All tests pass, code follows patterns
+2. **Quality**: All behavioral tests pass, code follows patterns
 3. **Documentation**: Specs accurately describe implementation
 4. **Traceability**: Clear path from instructions to code
 5. **Maintainability**: Future developers understand design rationale
 6. **Confidence**: User approved at each phase checkpoint
+7. **Executable Specs**: Behavioral tests serve as living documentation that verifies behavior
 
-Remember: The goal is not perfect specs, but **shared understanding** and **documented decisions** that guide implementation and enable future maintenance.
+Remember: The goal is not perfect specs, but **shared understanding** and **documented decisions** that guide implementation and enable future maintenance. Behavioral tests bridge the gap between prose documentation and running code—they start as specifications and end as verified behavior.

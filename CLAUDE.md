@@ -63,14 +63,6 @@ Task 3 ────► Agent F (tests)
 
 ## Commands Reference
 
-### LSP Navigation (use heavily)
-- `/definition <file> <line> <col>` - jump to symbol definition
-- `/references <file> <line> <col>` - find all usages of symbol
-- `/implementations <file> <line> <col>` - find interface implementations
-- `/type-at <file> <line> <col>` - get TypeScript type at position
-- `/rename <file> <line> <col> <newName>` - rename symbol across codebase
-- `/typecheck` - run full TypeScript type checking
-
 ### Module Discovery
 - `/modules` - list all ai-context modules with summaries
 - `/module <path>` - get full content of specific module (e.g., `/module ai-eval`)
@@ -112,4 +104,3 @@ Task 3 ────► Agent F (tests)
 1. Clarify requirements first (ask questions)
 2. Use skills for domain-specific patterns
 3. Grep `.context/` for library implementation details
-4. Run `/typecheck` before completing
