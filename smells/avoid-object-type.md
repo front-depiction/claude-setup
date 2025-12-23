@@ -9,6 +9,28 @@ severity: warning
 
 # Avoid `Object` and `{}` as Types
 
-Using `Object` or `{}` as types provides almost no type safety. They accept nearly any value except null/undefined, making them barely better than `any`. They don't describe data structure, provide poor IDE support, and make refactoring dangerous.
+```haskell
+-- Transformation
+object :: Object                  -- accepts nearly anything
+empty  :: {}                      -- same problem, no structure
 
-**Instead:** Define explicit interfaces or type aliases for object shapes, use `Record<K, V>` for dictionaries with arbitrary keys, use Effect Schema for runtime validation of external data, use `unknown` for truly unknown types, or use generics for flexible but type-safe functions.
+-- Instead
+data User = User { id :: Int, name :: String }  -- explicit shape
+record :: Record String a                       -- dictionary with known value type
+unknown :: Unknown                              -- truly unknown, requires validation
+```
+
+```haskell
+-- Pattern
+bad :: Object → Effect ()
+bad obj = doSomething obj         -- what fields? what types?
+
+good :: User → Effect ()
+good user = doSomething user      -- clear structure, IDE support
+
+-- For unknown shapes
+decode :: Unknown → Either ParseError User
+decode = Schema.decode userSchema
+```
+
+`Object` and `{}` provide no type safety—they accept any non-null value. Use explicit types, `Record<K,V>`, `unknown`, or Schema for validation.

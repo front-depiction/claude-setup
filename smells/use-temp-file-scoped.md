@@ -9,86 +9,41 @@ severity: warning
 
 # Use Scoped Temp Files for Automatic Cleanup
 
-## Problem: Direct `os.tmpdir()` Usage
+```haskell
+-- Transformation
+os.tmpdir        :: IO FilePath              -- Node-coupled, manual cleanup
+makeTempFile     :: Effect FilePath FS       -- manual cleanup required
+makeTempFileScoped :: Effect FilePath (FS | Scope)  -- auto cleanup
 
-Using Node.js's `os.tmpdir()` or importing the `os` module breaks cross-platform compatibility and requires manual cleanup. This approach:
-
-- **No automatic cleanup** - You must manually track and remove temp files/directories
-- **Not cross-platform** - Couples code to Node.js, preventing use with Bun or other runtimes
-- **Manual resource management** - Easy to leak resources on errors or early returns
-- **No Effect integration** - Can't compose with Effect's resource management
-
-```typescript
-// ❌ WRONG - breaks cross-platform compatibility
-import os from "os"
-import path from "path"
-import fs from "fs/promises"
-
-const tmpDir = os.tmpdir()
-const tmpFile = path.join(tmpDir, "myfile.txt")
-await fs.writeFile(tmpFile, "data")
-// Manual cleanup required - might not happen on error!
-await fs.unlink(tmpFile)
+-- Scoped resources
+withTempFile :: (FilePath → Effect a) → Effect a
+withTempFile use = scoped $ do
+  path ← makeTempFileScoped { prefix: "myapp-" }
+  use path
+  -- auto cleanup on scope exit, even on error
 ```
 
-## Problem: Non-Scoped FileSystem Methods
+```haskell
+-- Pattern
+bad :: Effect () FS
+bad = do
+  tmpFile ← makeTempFile
+  writeFileString tmpFile "data"
+  remove tmpFile                    -- might not run on error!
 
-Using `makeTempFile` or `makeTempDirectory` without the `Scoped` variant requires manual cleanup and can leak resources if errors occur. This leads to disk space issues and file handle leaks.
+good :: Effect () (FS | Scope)
+good = scoped $ do
+  tmpFile ← makeTempFileScoped { prefix: "myapp-" }
+  writeFileString tmpFile "data"
+  -- auto removed when scope ends
 
-```typescript
-// ⚠️ RISKY - manual cleanup required
-const program = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem
-  const tmpFile = yield* fs.makeTempFile()
-  // use tmpFile
-  yield* fs.remove(tmpFile)  // might not execute on error
-})
+-- Directories too
+withTempDir :: Effect () (FS | Scope)
+withTempDir = scoped $ do
+  dir ← makeTempDirectoryScoped { prefix: "myapp-" }
+  path ← join dir "file.txt"
+  writeFileString path "data"
+  -- entire dir removed when scope ends
 ```
 
-## Solution: Use `makeTempFileScoped` or `makeTempDirectoryScoped`
-
-**Instead:** Use Effect's `FileSystem.makeTempFileScoped` or `FileSystem.makeTempDirectoryScoped` which:
-
-- **Automatic cleanup** - Resources cleaned up when scope ends, even on errors
-- **Cross-platform** - Works with any platform via `@effect/platform` abstractions
-- **Effect resource management** - Integrates with Effect's scoped resource system
-- **Testable** - Can be mocked for testing
-
-```typescript
-// ✅ CORRECT - cross-platform with automatic cleanup
-import { FileSystem } from "@effect/platform"
-import { Effect } from "effect"
-
-const program = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem
-
-  // Automatically cleaned up when scope ends
-  const tmpFile = yield* fs.makeTempFileScoped({ prefix: "myapp-" })
-  yield* fs.writeFileString(tmpFile, "data")
-  // use tmpFile - automatically removed when scope ends
-}).pipe(Effect.scoped)
-
-// For directories
-const programDir = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem
-  const path = yield* Path.Path
-
-  const tmpDir = yield* fs.makeTempDirectoryScoped({ prefix: "myapp-" })
-  const filePath = path.join(tmpDir, "file.txt")
-  yield* fs.writeFileString(filePath, "data")
-  // entire directory automatically removed when scope ends
-}).pipe(Effect.scoped)
-```
-
-## Provide Platform Layer at Entry Point
-
-```typescript
-import { BunContext, BunRuntime } from "@effect/platform-bun"
-// or: import { NodeContext, NodeRuntime } from "@effect/platform-node"
-
-pipe(
-  program,
-  Effect.provide(BunContext.layer),
-  BunRuntime.runMain
-)
-```
+`makeTempFileScoped` provides automatic cleanup via Effect's scope. Never use `os.tmpdir()` (Node-coupled) or unscoped variants (leak resources).

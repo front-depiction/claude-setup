@@ -7,23 +7,32 @@ tag: use-effect-filesystem
 severity: error
 ---
 
-# Use FileSystem Service Instead of Direct `fs` Imports
+# Use FileSystem Service Instead of `fs`
 
-Direct imports of Node.js `fs` or `node:fs` modules break cross-platform compatibility and prevent testability. These platform-specific imports couple your code to Node.js, making it impossible to run on other platforms (Bun, browser) or mock filesystem operations in tests.
+```haskell
+-- Transformation
+import "node:fs"    :: Node → IO a        -- platform-coupled, untestable
+import "fs"         :: Node → IO a        -- same problem
 
-**Instead:** Use `@effect/platform`'s `FileSystem` service which provides a platform-agnostic abstraction. Provide the appropriate platform layer (`BunContext.layer` or `NodeContext.layer`) at your application entry point.
-
-```typescript
-// ❌ WRONG
-import * as fs from "node:fs"
-import { readFileSync } from "fs"
-
-// ✅ CORRECT
-import { FileSystem } from "@effect/platform"
-
-const program = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem
-  const content = yield* fs.readFileString("/path/to/file.txt")
-  return content
-})
+-- Instead
+FileSystem          :: Effect a FileSystem  -- platform-agnostic
 ```
+
+```haskell
+-- Pattern
+bad :: FilePath → IO String
+bad path = fs.readFileSync path "utf-8"   -- R = Node, untestable
+
+good :: FilePath → Effect String FileSystem
+good path = do
+  fs ← FileSystem.FileSystem
+  fs.readFileString path                  -- R ⊃ FileSystem, portable
+
+-- Platform provision at entry point
+main :: Effect () (FileSystem | Console | ...)
+main = program
+  & provide BunContext.layer    -- or NodeContext.layer
+  & runMain
+```
+
+Direct `fs` imports couple code to Node.js. Use `@effect/platform` FileSystem for portability across Node, Bun, and browser.

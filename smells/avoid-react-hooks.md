@@ -9,24 +9,40 @@ severity: error
 
 # Avoid React Hooks - Use View Models
 
-React hooks scatter state and logic across components, making code untestable and breaking dependency injection.
+```haskell
+-- Transformation
+useState     :: a → (a, a → ())          -- scattered state, untestable
+useEffect    :: (() → ()) → [a] → ()     -- cleanup error-prone
 
-**Why it's wrong:**
-- State lives in components instead of testable VMs
-- No typed errors, no DI, no service mocking
-- `useEffect` cleanup is error-prone
+-- Instead: View Model pattern
+data VM = VM
+  { state$  :: Atom State               -- reactive state
+  , action  :: () → Effect ()           -- effectful actions
+  }
 
-**What to do:**
-- Invoke the `react-vm` skill for implementation guidance
-- Move all state to VM atoms, all effects to VM actions
-- Components become pure renderers using only `useAtomValue`, `useAtomSet`, `useVM`
+-- Component is pure renderer
+component :: VM → JSX
+component vm = useAtomValue (state$ vm)  -- only reads atoms
+```
 
-**Common replacements:**
-- `useState` → VM atom
-- `useEffect` for side effects → VM action
-- `useEffect` for event listeners → `Atom.make` with `get.addFinalizer`
-- `useSearchParams` → `Atom.searchParam`
-- `useRef` for DOM → pass ref from parent, or use VM for scroll triggers
-- `useMemo`/`useCallback` → derived atoms in VM
+```haskell
+-- Replacements
+useState      → vmAtom :: Atom a
+useEffect     → vmAction :: Effect ()
+useCallback   → derivedAtom :: Atom (a → b)
+useMemo       → derivedAtom :: Atom a
+useRef (DOM)  → pass from parent ∨ VM trigger
+useSearchParams → Atom.searchParam
+useEffect (cleanup) → Atom.make with get.addFinalizer
 
-**Note:** VM implementation is highly parallelizable - spawn multiple subagents to implement VMs concurrently.
+-- Architecture
+data Component = Component
+  { view :: VM → JSX           -- pure renderer
+  , vm   :: Layer VM           -- testable, injectable
+  }
+
+-- Invoke skill for implementation
+invoke "react-vm"
+```
+
+React hooks scatter state across components. Use View Models: state in atoms, effects in actions, components as pure renderers.

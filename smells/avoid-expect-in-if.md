@@ -9,22 +9,35 @@ severity: warning
 
 # Avoid `expect()` Inside `if` Blocks
 
-Nesting `expect()` calls inside `if` blocks is a code smell indicating the test needs type narrowing. When you write `if (value) { expect(value.prop)... }`, the test silently passes if the condition is false, hiding failures.
+```haskell
+-- Anti-pattern
+testBad :: Effect ()
+testBad = do
+  result ← runTest
+  if isJust (value result)           -- condition false → silently passes!
+    then expect (name $ fromJust $ value result) `toBe` "test"
+    else pure ()                     -- hidden skip
 
-**Instead:** Use `assert` or type guard assertions to narrow types. This ensures the test fails fast if the expected condition isn't met, rather than silently skipping assertions.
+-- Pattern
+narrow :: Maybe a → Effect a
+narrow = assert "Expected value to be defined"
 
-```typescript
-// Bad - silently skips if value is undefined
-if (result.value) {
-  expect(result.value.name).toBe("test")
-}
-
-// Good - fails immediately if value is undefined
-assert(result.value, "Expected value to be defined")
-expect(result.value.name).toBe("test")
-
-// Also good - use expect with toBeDefiend first
-expect(result.value).toBeDefined()
-assert(result.value) // narrow for TypeScript
-expect(result.value.name).toBe("test")
+testGood :: Effect ()
+testGood = do
+  result ← runTest
+  value  ← narrow (value result)     -- fails fast if Nothing
+  expect (name value) `toBe` "test"  -- type narrowed, safe
 ```
+
+```haskell
+-- Transformation
+if value then expect(value.x) else skip    -- ✗ silent skip
+assert value; expect(value.x)               -- ✓ fail fast
+
+-- Alternative
+expect(value) `toBeDefined`
+assert value                                -- narrow for TS
+expect(value.name) `toBe` "test"
+```
+
+`if (x) { expect(x.y) }` silently passes when condition is false. Use `assert` to narrow types and fail fast.

@@ -7,23 +7,30 @@ tag: wrap-fs-promises
 severity: warning
 ---
 
-# Avoid Direct `fs/promises` Usage
+# Use FileSystem Service Instead of `fs/promises`
 
-While `fs/promises` is async, using it directly loses Effect's benefits: typed errors, composability, dependency injection, resource management, and testability. Operations throw untyped exceptions and can't be composed with Effect's primitives.
+```haskell
+-- Transformation
+import "fs/promises"     :: Node → Promise a    -- platform-coupled, Promise-based
+import "node:fs/promises" :: Node → Promise a   -- same problem
 
-**Instead:** Use `@effect/platform`'s `FileSystem` service which wraps async operations in Effect, providing typed errors (`SystemError` with reasons like `NotFound`, `PermissionDenied`), proper resource management, and full composability.
-
-```typescript
-// ❌ WRONG
-import { readFile } from "node:fs/promises"
-const content = await readFile("/path/file.txt", "utf-8")
-
-// ✅ CORRECT
-import { FileSystem } from "@effect/platform"
-
-const program = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem
-  const content = yield* fs.readFileString("/path/file.txt")
-  return content
-})
+-- Instead
+FileSystem              :: Effect a FileSystem  -- Effect-native, platform-agnostic
 ```
+
+```haskell
+-- Pattern
+bad :: FilePath → Promise String
+bad path = fsPromises.readFile path "utf-8"   -- Promise, not Effect
+
+good :: FilePath → Effect String FileSystem
+good path = do
+  fs ← FileSystem.FileSystem
+  fs.readFileString path                      -- Effect-native
+
+-- If wrapping is necessary
+wrap :: Promise a → Effect a Error
+wrap promise = Effect.tryPromise \_ → promise
+```
+
+`fs/promises` returns Promises, not Effects. Use `@effect/platform` FileSystem for Effect-native file operations with typed errors.

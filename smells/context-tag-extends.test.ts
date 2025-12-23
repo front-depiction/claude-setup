@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-const pattern = /class\s+\w+Tag\s+extends\s+Context\.Tag/
+const pattern = /(class\s+\w+Tag\s+extends\s+Context\.Tag|Context\.GenericTag<\w+Service>)/
 
 describe("context-tag-extends smell", () => {
   it("detects class with Tag suffix extending Context.Tag", () => {
@@ -17,8 +17,16 @@ describe("context-tag-extends smell", () => {
     expect(pattern.test("class ConfigTag extends Context.Tag")).toBe(true)
   })
 
-  it("does not match interface + GenericTag pattern", () => {
-    expect(pattern.test("const MyService = Context.GenericTag<MyService>('MyService')")).toBe(false)
+  it("detects GenericTag with Service suffix in type parameter", () => {
+    expect(pattern.test("Context.GenericTag<ParallelClientService>")).toBe(true)
+    expect(pattern.test("const ParallelClient = Context.GenericTag<ParallelClientService>('@parallel/ParallelClient')")).toBe(true)
+    expect(pattern.test("export const MyService = Context.GenericTag<MyServiceService>('MyService')")).toBe(true)
+  })
+
+  it("does not match GenericTag without Service suffix", () => {
+    expect(pattern.test("const ParallelClient = Context.GenericTag<ParallelClient>('@parallel/ParallelClient')")).toBe(false)
+    expect(pattern.test("const Database = Context.GenericTag<Database>('Database')")).toBe(false)
+    expect(pattern.test("const UserRepository = Context.GenericTag<UserRepository>('@app/UserRepository')")).toBe(false)
   })
 
   it("does not match class without Tag suffix", () => {

@@ -9,6 +9,32 @@ severity: warning
 
 # Use Random Service Instead of `Math.random()`
 
-Direct calls to `Math.random()` are non-deterministic and make tests impossible to reproduce. You can't control random values in tests, making it impossible to test edge cases or verify random-dependent logic reliably.
+```haskell
+-- Transformation
+mathRandom :: IO Float              -- impure, non-deterministic
+random     :: Effect Float Random   -- explicit dependency, testable
 
-**Instead:** Use Effect's `Random` service (`Random.next`, `Random.nextIntBetween`, `Random.shuffle`, etc.). This enables deterministic testing with `TestRandom` where you can seed values or feed specific sequences for edge case testing.
+-- Random operations
+next       :: Effect Float Random
+nextInt    :: Effect Int Random
+nextRange  :: (Int, Int) → Effect Int Random
+shuffle    :: [a] → Effect [a] Random
+```
+
+```haskell
+-- Pattern
+bad :: IO Int
+bad = floor (Math.random * 100)     -- R = ∅, untestable
+
+good :: Effect Int Random
+good = Random.nextIntBetween 0 100  -- R ⊃ Random, deterministic in tests
+
+-- In tests
+test :: Effect () TestRandom
+test = do
+  TestRandom.feedInts [42, 7, 13]   -- deterministic sequence
+  result ← good
+  assert (result == 42)
+```
+
+`Math.random()` is non-deterministic. Use `Random` service for reproducible randomness via `TestRandom.feed*` in tests.

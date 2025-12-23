@@ -9,6 +9,32 @@ severity: warning
 
 # Use Effect.tryPromise Instead of Effect.promise
 
-`Effect.promise` only handles success - rejected promises become untyped defects that bypass normal error handling. Defects can't be caught with `catchTag` or `catchAll`, making error recovery impossible and tests fail catastrophically.
+```haskell
+-- Transformation
+promise    :: IO (Promise a) → Effect a ∅        -- rejection = defect (uncatchable)
+tryPromise :: IO (Promise a) → Effect a E        -- rejection = typed error (catchable)
+```
 
-**Instead:** Use `Effect.tryPromise` for promises that can reject (99% of cases). This puts errors in the type signature as `Effect.Effect<A, E>` where they can be properly handled, recovered from, and tested. Define custom error classes extending `Data.TaggedError` for precise error handling.
+```haskell
+-- Pattern
+bad :: Effect User ∅
+bad = Effect.promise \_ → fetchUser id
+  -- rejection becomes Defect: can't catch, crashes fiber
+
+good :: Effect User FetchError
+good = Effect.tryPromise
+  { try:   \_ → fetchUser id
+  , catch: \e → FetchError (show e)
+  }
+  -- rejection becomes typed error: catchable, testable
+
+-- Error handling
+handle :: Effect User FetchError → Effect User ∅
+handle = catchTag "FetchError" \e → defaultUser
+
+-- Defects bypass all handlers
+defect :: Effect a ∅ → Effect a E
+defect = id    -- can't recover from defects
+```
+
+`Effect.promise` converts rejections to uncatchable defects. Use `Effect.tryPromise` for typed, recoverable errors in the E channel.

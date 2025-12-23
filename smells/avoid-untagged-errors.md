@@ -7,40 +7,40 @@ tag: avoid-untagged-errors
 severity: warning
 ---
 
-# Avoid `instanceof Error` and `new Error` in Effect Code
+# Avoid `instanceof Error` and `new Error`
 
-Using `instanceof Error` or `new Error()` indicates untyped error handling. Effect code should use `Data.TaggedError` for type-safe, discriminated errors that flow through the error channel.
+```haskell
+-- Transformation
+instanceofError :: Error → Bool           -- opaque, no discrimination
+newError        :: String → Error         -- untagged, untrackable
 
-**Problems with untagged errors:**
-- `instanceof Error` checks are a code smell - errors should be discriminated by `_tag`
-- `new Error()` creates opaque errors without type discrimination
-- Can't exhaustively pattern match on error types
-- Loses the benefits of Effect's typed error channel
-- Often indicates try-catch usage or Promise-style error handling
+-- Instead
+data MyError = MyError { message :: String }
+  deriving TaggedError "MyError"
 
-**Instead use:**
-- `Data.TaggedError` - define discriminated error types
-- `catchTag` / `catchTags` - handle specific error types
-- `Match.tag` or `_tag` checks for error discrimination
-- `Effect.fail(new MyTaggedError(...))` - fail with typed errors
-
-**Example transformation:**
-```typescript
-// Bad: untagged error handling
-if (error instanceof Error) {
-  console.log(error.message)
-}
-throw new Error("Something went wrong")
-
-// Good: tagged error handling
-class MyError extends Data.TaggedError("MyError")<{ message: string }> {}
-
-// Creating errors
-Effect.fail(new MyError({ message: "Something went wrong" }))
-
-// Handling errors by tag
-pipe(
-  myEffect,
-  Effect.catchTag("MyError", (e) => Effect.succeed(e.message))
-)
+taggedFail :: MyError → Effect a MyError
+catchTag   :: "MyError" → (MyError → Effect a) → Effect a E → Effect a (E - MyError)
 ```
+
+```haskell
+-- Pattern
+bad :: Error → Effect ()
+bad e
+  | e `instanceof` Error = log (message e)    -- which error type?
+  | otherwise            = pure ()
+
+good :: Effect () MyError
+good = pipe
+  myEffect
+  $ catchTag "MyError" \e → log (message e)
+
+-- Exhaustive handling
+handle :: Effect a (E₁ | E₂ | E₃) → Effect a ∅
+handle = catchTags
+  { E₁: handler₁
+  , E₂: handler₂
+  , E₃: handler₃
+  }
+```
+
+`Data.TaggedError` enables exhaustive pattern matching via `_tag`. Use `catchTag` for type-safe error discrimination.

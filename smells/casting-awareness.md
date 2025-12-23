@@ -9,15 +9,32 @@ severity: info
 
 # Type Assertion Awareness
 
-Type assertions (`as T`) tell TypeScript "trust me, I know better." Sometimes this is correct—you genuinely have more information than the compiler. But often it signals that the types upstream could be improved.
+```haskell
+-- Type assertion
+cast :: a → b                     -- "trust me, I know better"
 
-**Before casting, check if it's even necessary.** Use `/type-at <file> <line> <col>` to inspect the actual type. Often the value is already the type you're casting to—the cast is redundant.
+-- Before casting, check
+redundant  :: a → a               -- already correct type (use LSP!)
+narrowable :: ∀ a. Generic a ⇒ F a  -- use generics instead
+guardable  :: a → Maybe b         -- runtime check for safety
+decodable  :: Schema b → a → Either ParseError b  -- validate external data
+```
 
-Consider whether:
-- The value is already correctly typed (check with LSP!)
-- The source type could be narrowed with generics
-- A type guard would provide runtime safety
-- The API returning the data could have better types
-- Effect Schema could validate external data
+```haskell
+-- Pattern
+suspicious :: Unknown → User
+suspicious x = x `as` User        -- why is x Unknown?
 
-This is informational only—casting isn't always wrong, just worth a second look.
+investigate :: Effect ()
+investigate = do
+  actualType ← lsp.typeAt file line col    -- what is it really?
+  case actualType of
+    User → pure ()                -- cast was redundant
+    _    → fix (sourceType actualType)     -- improve upstream types
+
+-- Consider
+withGenerics :: ∀ a. Decodable a ⇒ String → Effect a ParseError
+withGenerics = Schema.decode schema       -- types flow correctly
+```
+
+Casts tell the compiler "trust me." Sometimes correct, often a signal that upstream types could be improved. Check with LSP first.

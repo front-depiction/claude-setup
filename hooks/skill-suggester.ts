@@ -190,36 +190,53 @@ const program = Effect.gen(function* () {
 
   // Always: Remind about context efficiency
   parts.push(`<context_efficiency>
-Minimize context usage by preferring Explore agents over direct file reads.
-Let subagents handle file exploration - preserve your context for coordination.
-Avoid reading files yourself unless absolutely necessary for decision-making.
+preserve :: Context → Effect ()
+preserve ctx = do
+  exploration ← spawn ExploreAgent query
+  await exploration                    -- subagent reads, you coordinate
+  -- ¬read files directly unless decision-critical
 </context_efficiency>`)
 
   // Always: Remind about delegation
   parts.push(`<delegation_strategy>
-Delegate all implementation work to subagents. Your role is coordination only.
-Identify independent tasks and spawn 5+ parallel agents when possible.
-Structure work for maximal parallelism - never implement directly.
+delegate :: Task → Effect [Agent]
+delegate task
+  | atomic task     = pure <$> spawn task
+  | otherwise       = parallel $ fmap delegate (decompose task)
+
+-- invariant: |agents| ≥ 5 ∨ reconsider decomposition
+-- self = coordinator, ¬implementer
 </delegation_strategy>`)
 
   // Always: Delegation prompting guidance
   parts.push(`<delegation_prompts>
-When prompting subagents, include clear WHAT and HOW at a high level.
-Direct agents to check /modules and .context/ files for patterns and decisions.
-Encourage frequent /typecheck runs scoped to relevant directories (not full codebase).
-Agents should validate incrementally with LSP commands, not one massive final check.
+prompt :: Agent → Task → Effect ()
+prompt agent task = do
+  specify (what task)              -- clear objective
+  specify (how task)               -- high-level approach
+  direct agent "/modules"          -- check patterns
+  direct agent ".context/"         -- check decisions
+  direct agent "/typecheck dir"    -- validate incrementally, not globally
 </delegation_prompts>`)
 
   // Always: Remind about concurrency
   parts.push(`<parallel_execution>
-Make all independent tool calls in parallel within a single message.
-This maximizes speed and efficiency.
+execute :: [Tool] → Effect [Result]
+execute tools = case partition independent tools of
+  (parallel, sequential) → do
+    p ← parallel $ fmap call parallel   -- single message
+    s ← traverse call sequential
+    pure $ p <> s
 </parallel_execution>`)
 
   // Always: Remind about module commands
   parts.push(`<context_discovery>
-Use /modules to list available ai-context modules.
-Use /module [path] to read specific module content.
+discover :: Effect Context
+discover = do
+  modules ← "/modules"              -- list ai-context modules
+  content ← "/module" path          -- read specific module
+  matches ← "/module-search" pat    -- search by pattern
+  pure $ Context modules content matches
 </context_discovery>`)
 
   // Always: Show version

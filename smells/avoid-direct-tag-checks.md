@@ -9,43 +9,37 @@ severity: warning
 
 # Avoid Direct `_tag` Property Checks
 
-Checking `._tag === "SomeVariant"` directly is a code smell. Tagged types should export refinements and predicates that:
+```haskell
+-- Transformation
+directCheck :: Event → Bool
+directCheck e = e._tag == "FactRecorded"   -- fragile, poor narrowing
 
-1. Provide better type narrowing
-2. Centralize the discrimination logic
-3. Make refactoring safer (rename the tag, update one place)
-4. Enable better composition with Effect's `Match` and `$is`/`$match` utilities
-
-**Bad:**
-```typescript
-if (event._tag === "FactRecorded") {
-  // TypeScript may not narrow correctly
-}
+-- Instead
+$is   :: Tag → Event → Bool                -- from TaggedEnum
+$match :: { Tag₁: h₁, Tag₂: h₂ } → Event → a  -- exhaustive matching
 ```
 
-**Good:**
-```typescript
-// Module exports predicates
-export const isFactRecorded = (e: SessionEvent): e is FactRecorded =>
-  e._tag === "FactRecorded"
+```haskell
+-- Pattern
+bad :: Event → Effect ()
+bad e
+  | e._tag == "FactRecorded" = handleFact e    -- manual check, fragile
+  | otherwise                = pure ()
 
-// Or use Data.TaggedEnum's $is
-const { $is } = Data.taggedEnum<SessionEvent>()
+good :: Event → Effect ()
+good = $match
+  { FactRecorded:  handleFact
+  , QuestionAsked: handleQuestion
+  }                                            -- exhaustive, type-safe
 
-if ($is("FactRecorded")(event)) {
-  // Properly narrowed
-}
+-- Or with predicates
+data Event = FactRecorded | QuestionAsked
+  deriving TaggedEnum
+
+isFactRecorded :: Event → Bool
+isFactRecorded = $is "FactRecorded"
+
+-- Refactoring-safe: rename tag in one place
 ```
 
-**Best:** Use pattern matching instead of conditionals:
-```typescript
-const { $match } = Data.taggedEnum<SessionEvent>()
-
-pipe(
-  event,
-  $match({
-    FactRecorded: (e) => handleFact(e),
-    QuestionAsked: (e) => handleQuestion(e),
-  })
-)
-```
+Direct `_tag` checks don't narrow types correctly. Use `$is` for predicates or `$match` for exhaustive pattern matching via `Data.taggedEnum`.

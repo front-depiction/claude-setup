@@ -9,6 +9,33 @@ severity: warning
 
 # Avoid Non-Null Assertion Operator `!`
 
-The `!` operator tells TypeScript "trust me, this value is not null/undefined" without runtime checks. If the assumption proves false, your app crashes with "Cannot read property of undefined" instead of being caught at compile time.
+```haskell
+-- Transformation
+bang :: a | Null → a        -- "trust me" → runtime crash on null
+safe :: a | Null → Maybe a  -- explicit handling required
 
-**Instead:** Use optional chaining (`?.`) with nullish coalescing (`??`), explicit null checks, Effect's `Option` type for optional values, Schema validation for external data, or type guards to prove to TypeScript that a value exists.
+-- Instead
+optional  :: a?.b           -- optional chaining
+coalesce  :: a ?? default   -- nullish coalescing
+option    :: Option a       -- Effect's optional type
+guard     :: a → Maybe a    -- type guard proves existence
+```
+
+```haskell
+-- Pattern
+bad :: Map → Value
+bad map = map.get("key")!         -- crash if key missing
+
+good :: Map → Maybe Value
+good map = Option.fromNullable (map.get "key")
+
+-- Or with chaining
+safe :: User → Maybe Email
+safe user = user?.contact?.email ?? Nothing
+
+-- With Schema for external data
+validated :: Unknown → Either ParseError User
+validated = Schema.decode userSchema
+```
+
+The `!` operator is "trust me, this isn't null"—if wrong, runtime crash. Use `?.`, `??`, `Option`, or type guards for safe null handling.
