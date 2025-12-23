@@ -9,29 +9,29 @@ severity: info
 
 # Consider `Option` Instead of `| null`
 
-Union types with `null` work, but `Option<T>` from Effect provides a richer API for handling optional values. This is a low-priority signal, not an error.
+```haskell
+-- Transformation
+nullable :: T | Null              -- scattered null checks
+option   :: Option T              -- composable, chainable
 
-**Why Option?**
-
-- Chainable operations: `Option.map`, `Option.flatMap`, `Option.filter`
-- Explicit handling: forces consideration of the "none" case
-- Composable: works seamlessly with Effect pipelines
-- No null checks scattered through code
-
-**When `| null` is fine:**
-
-- External API boundaries (JSON, DOM, third-party libs)
-- Simple cases where Option would be overkill
-- Performance-critical paths where the extra allocation matters
-
-**Instead of:**
-```ts
-function find(id: string): User | null
+-- Option operations
+map      :: (a → b) → Option a → Option b
+flatMap  :: (a → Option b) → Option a → Option b
+filter   :: (a → Bool) → Option a → Option a
+getOrElse :: a → Option a → a
 ```
 
-**Consider:**
-```ts
-import { Option } from "effect"
+```haskell
+-- Pattern
+bad :: Id → User | Null
+bad id = users.get id             -- caller must check null
 
-function find(id: string): Option.Option<User>
+good :: Id → Option User
+good id = Option.fromNullable (users.get id)
+
+-- Composition
+findEmail :: Id → Option Email
+findEmail = good >=> (_.email >>> Option.fromNullable)
 ```
+
+`Option<T>` provides chainable operations. Use `| null` only at external boundaries (JSON, DOM, third-party libs).

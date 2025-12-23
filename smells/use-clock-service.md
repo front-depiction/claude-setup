@@ -9,6 +9,30 @@ severity: warning
 
 # Use Effect DateTime Instead of JS Date
 
-Direct use of JavaScript's `Date` object (`new Date()`, `Date.now()`, `Date.parse()`, etc.) is non-deterministic and makes tests flaky or impossible to write correctly. Time-based logic becomes unpredictable in tests and can't be controlled for reproducible results.
+```haskell
+-- Transformation
+newDate   :: IO Date              -- impure, non-deterministic
+dateNow   :: IO Milliseconds      -- side effect, untestable
 
-**Instead:** Use Effect's `DateTime` module for all date/time operations. For current time, use `DateTime.now` or `Clock.currentTimeMillis`. This enables controlled time in tests via `TestClock` and proper integration with Effect's scheduling features.
+-- Instead
+now       :: Effect DateTime R    -- R includes Clock
+currentMs :: Effect Millis Clock  -- explicit dependency
+```
+
+```haskell
+-- Pattern
+bad :: IO Timestamp
+bad = Date.now                    -- where R = ∅, untestable
+
+good :: Effect Timestamp Clock
+good = Clock.currentTimeMillis    -- where R ⊃ Clock, testable
+
+-- In tests
+test :: Effect () TestClock
+test = do
+  TestClock.adjust (minutes 5)    -- deterministic time
+  result ← good
+  assert (result == expected)
+```
+
+Direct `Date` usage is non-deterministic. Use `DateTime.now` or `Clock.currentTimeMillis` for testable time operations via `TestClock`.

@@ -9,6 +9,27 @@ severity: warning
 
 # Avoid `@ts-ignore` and `@ts-expect-error`
 
-Suppressing TypeScript errors masks real type issues instead of solving them. These comments disable type checking for the next line, hiding bugs that will surface at runtime and breaking refactoring safety.
+```haskell
+-- Anti-pattern
+tsIgnore :: TypeError → ()    -- hide error, pray at runtime
+tsExpect :: TypeError → ()    -- same with false confidence
 
-**Instead:** Fix the root cause by addressing the underlying type issue, use proper type guards or Schema validation for unknown types, improve type definitions for third-party libraries, or use explicit type assertions with `as` when truly necessary.
+-- Instead
+fix        :: TypeError → Code → Code        -- address root cause
+guard      :: Unknown → Maybe Known          -- runtime validation
+schema     :: Schema a → Unknown → Either ParseError a
+```
+
+```haskell
+-- Pattern
+bad :: Effect a
+bad = do
+  -- @ts-ignore
+  x ← brokenCode          -- compiler is wrong, right?
+
+good :: Effect a
+good = do
+  x ← Schema.decode schema raw   -- prove correctness
+```
+
+Suppressing errors masks bugs that surface at runtime. Fix the underlying type issue instead.

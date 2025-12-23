@@ -9,54 +9,40 @@ severity: warning
 
 # Use `Effect.forEach` Instead of For Loops
 
-Using `yield*` inside a `for` loop is imperative. Use `Effect.forEach` for declarative iteration with composability benefits (easy parallelization, uniform error handling).
+```haskell
+-- Transformation
+for item in items { yield* process item }   -- imperative, not composable
+forEach items process                        -- declarative, parallelizable
 
-```typescript
-// Bad - imperative for loop
-for (const item of items) {
-  yield* processItem(item)
-}
-
-// Good - declarative
-yield* Effect.forEach(items, processItem)
-
-// Good - parallel execution
-yield* Effect.forEach(items, processItem, { concurrency: "unbounded" })
+-- Operations
+forEach  :: [a] → (a → Effect b) → Effect [b]
+filter   :: [a] → (a → Effect Bool) → Effect [a]
+traverse :: (a → Effect b) → [a] → Effect [b]
 ```
 
-**Handling conditionals:**
+```haskell
+-- Pattern
+bad :: [Item] → Effect ()
+bad items = for item ← items do
+  yield* processItem item          -- imperative loop
 
-```typescript
-// Bad - continue for conditional skip
-for (const id of ids) {
-  if (alreadyProcessed.has(id)) continue
-  yield* process(id)
-}
+good :: [Item] → Effect ()
+good items = forEach items processItem
 
-// Good - filter first, or conditional in callback
-yield* Effect.forEach(
-  ids.filter((id) => !alreadyProcessed.has(id)),
-  process
-)
-// Or:
-yield* Effect.forEach(ids, (id) =>
-  alreadyProcessed.has(id) ? Effect.void : process(id)
-)
+parallel :: [Item] → Effect ()
+parallel items = forEach items processItem { concurrency: "unbounded" }
+
+-- With filtering
+filtered :: [Id] → Effect ()
+filtered ids = do
+  active ← filter ids (not <<< alreadyProcessed)
+  forEach active process
+
+-- Effectful predicate
+effectfulFilter :: [User] → Effect ()
+effectfulFilter users = do
+  active ← Effect.filter users (checkUserStatus <<< _.id)
+  forEach active sendNotification
 ```
 
-**When the operation is effectful:**
-
-```typescript
-// Bad - effectful validation in for loop
-for (const user of users) {
-  const isActive = yield* checkUserStatus(user.id)
-  if (!isActive) continue
-  yield* sendNotification(user)
-}
-
-// Good - Effect.filter for effectful predicate, then forEach
-const activeUsers = yield* Effect.filter(users, (user) =>
-  checkUserStatus(user.id)
-)
-yield* Effect.forEach(activeUsers, sendNotification)
-```
+For loops with `yield*` are imperative. `Effect.forEach` enables parallel execution, uniform error handling, and composition.

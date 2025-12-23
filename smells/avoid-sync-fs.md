@@ -9,22 +9,33 @@ severity: error
 
 # Avoid Synchronous Filesystem Operations
 
-Synchronous filesystem operations block the event loop, degrading application performance. They freeze the entire process until completion and can't be composed with Effect's concurrency primitives or interrupted.
+```haskell
+-- Transformation
+readFileSync  :: FilePath → IO String     -- blocks event loop
+writeFileSync :: FilePath → String → IO () -- same problem
 
-**Instead:** Use Effect's `FileSystem` service which provides async operations that integrate with Effect's runtime for composition, retries, racing, and interruption.
-
-```typescript
-// ❌ WRONG
-import { readFileSync, writeFileSync } from "fs"
-const content = readFileSync("/path/file.txt", "utf-8")
-writeFileSync("/path/out.txt", content)
-
-// ✅ CORRECT
-import { FileSystem } from "@effect/platform"
-
-const program = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem
-  const content = yield* fs.readFileString("/path/file.txt")
-  yield* fs.writeFileString("/path/out.txt", content)
-})
+-- Instead
+readFileString  :: FilePath → Effect String FileSystem
+writeFileString :: FilePath → String → Effect () FileSystem
 ```
+
+```haskell
+-- Pattern
+bad :: FilePath → IO String
+bad path = fs.readFileSync path "utf-8"   -- blocking, defeats async
+
+good :: FilePath → Effect String FileSystem
+good path = do
+  fs ← FileSystem.FileSystem
+  fs.readFileString path                  -- non-blocking, composable
+
+-- Sync → Async mapping
+readFileSync   → readFileString
+writeFileSync  → writeFileString
+mkdirSync      → makeDirectory
+existsSync     → exists
+unlinkSync     → remove
+readdirSync    → readDirectory
+```
+
+Sync operations block the event loop. Use Effect's FileSystem service for async, composable file operations.

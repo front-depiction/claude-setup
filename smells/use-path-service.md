@@ -7,23 +7,33 @@ tag: use-effect-path
 severity: warning
 ---
 
-# Use Path Service Instead of Direct `path` Imports
+# Use Path Service Instead of `path`
 
-Direct imports of Node.js `path` module break cross-platform compatibility. Path separators and absolute path formats differ across platforms (Windows vs Unix).
+```haskell
+-- Transformation
+import "node:path"  :: Node → Path a    -- platform-coupled
+import "path"       :: Node → Path a    -- same problem
 
-**Instead:** Use `@effect/platform`'s `Path` service which provides platform-agnostic path operations. The platform layer automatically provides the correct implementation for your runtime.
-
-```typescript
-// ❌ WRONG
-import * as path from "node:path"
-const filePath = path.join(dir, filename)
-
-// ✅ CORRECT
-import { Path } from "@effect/platform"
-
-const program = Effect.gen(function* () {
-  const path = yield* Path.Path
-  const filePath = path.join(dir, filename)
-  return filePath
-})
+-- Instead
+Path               :: Effect Path Path  -- platform-agnostic
 ```
+
+```haskell
+-- Pattern
+bad :: String → String → String
+bad dir file = path.join dir file      -- R = Node
+
+good :: String → String → Effect String Path
+good dir file = do
+  p ← Path.Path
+  p.join dir file                      -- R ⊃ Path, portable
+
+-- Path operations
+join      :: [String] → Effect String Path
+dirname   :: String → Effect String Path
+basename  :: String → Effect String Path
+extname   :: String → Effect String Path
+resolve   :: String → Effect String Path
+```
+
+Direct `path` imports couple code to Node.js. Use `@effect/platform` Path for cross-platform path operations.

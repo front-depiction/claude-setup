@@ -9,31 +9,41 @@ severity: warning
 
 # Use Effect Console Instead of console.*
 
-Direct use of `console.log`, `console.error`, etc. in Effect code breaks the effectful paradigm. Wrapping console calls in `Effect.sync` is especially egregious - it's effectful ceremony with none of the benefits.
+```haskell
+-- Transformation
+console.log   :: String → IO ()      -- side effect, not composable
+console.error :: String → IO ()      -- same problem
 
-**Bad:**
-```typescript
-Effect.tapError((error) =>
-  Effect.sync(() => {
-    console.error("Chat error:", error)
-  })
-)
+-- Instead
+Console.log   :: String → Effect () Console
+Effect.log    :: String → Effect () ∅        -- with structured logging
+Effect.logError :: String → Effect () ∅
 ```
 
-**Good:**
-```typescript
-import * as Console from "effect/Console"
+```haskell
+-- Pattern
+bad :: Effect ()
+bad = do
+  Effect.sync \_ → console.error "Error:" error   -- ceremony with no benefit
 
-Effect.tapError((error) => Console.error("Chat error:", error))
+good :: Effect ()
+good = Console.error ("Error:" <> show error)     -- proper Effect console
+
+better :: Effect ()
+better = Effect.logError error                    -- structured, with context
+
+-- Why Effect logging
+structured :: Effect () ∅
+structured = do
+  Effect.logInfo "Processing" `withLogSpan` "request"
+  -- adds: timestamp, span, log level, structured context
+
+-- Testable
+test :: Effect () TestConsole
+test = do
+  program
+  logs ← TestConsole.output
+  assert (logs `contains` "expected message")
 ```
 
-**Also Good:**
-```typescript
-Effect.tapError(Effect.logError)
-```
-
-**Why this matters:**
-- `Console` integrates with Effect's logging infrastructure
-- `Effect.log*` adds structured context, spans, and log levels
-- Console service can be mocked in tests
-- Consistent with Effect's philosophy of explicit effects
+`console.*` in Effect code breaks the paradigm. Use `Console` service or `Effect.log*` for structured, testable logging.

@@ -9,6 +9,39 @@ severity: warning
 
 # Effect.runSync/runPromise Only at Entry Points
 
-Running effects in the middle of application logic breaks composition and prevents you from transforming, retrying, or racing effects. It converts declarative Effect programs back into imperative side effects, defeating the entire purpose of Effect.
+```haskell
+-- Transformation
+runSync    :: Effect a E R → a        -- escapes Effect, loses composition
+runPromise :: Effect a E R → Promise a -- same problem
 
-**Instead:** Compose effects using `Effect.gen` and `yield*` throughout your application. Only run effects at entry points: main functions, API handlers, event handlers, or test runners. Keep your logic as composable Effect values until the application boundary.
+-- Instead: compose until boundary
+compose :: Effect a E R → Effect b E R → Effect (a, b) E R
+yield*  :: Effect a E R → a           -- inside Effect.gen only
+```
+
+```haskell
+-- Pattern
+bad :: Effect () R
+bad = do
+  result ← pure $ Effect.runSync someEffect   -- breaks composition!
+  doSomething result
+  -- can't retry, race, timeout the inner effect
+
+good :: Effect () R
+good = do
+  result ← someEffect                         -- still composable
+  doSomething result
+  -- can wrap entire program with retry, race, timeout
+
+-- Entry points only
+main :: IO ()
+main = Effect.runMain program              -- ✓ application boundary
+
+handler :: Request → IO Response
+handler req = Effect.runPromise (handle req)  -- ✓ API boundary
+
+test :: Spec
+test = Effect.runPromise (testProgram)        -- ✓ test boundary
+```
+
+Running effects mid-logic breaks composition. Keep effects as values until entry points (main, handlers, tests).

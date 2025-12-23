@@ -9,53 +9,40 @@ severity: error
 
 # VM Code in Wrong File
 
-View Models must be defined in dedicated `.vm.ts` files, not in component files or other locations.
+```haskell
+-- File structure convention
+data ComponentFiles = ComponentFiles
+  { component :: "Component.tsx"      -- pure renderer
+  , viewModel :: "Component.vm.ts"    -- VM definition
+  , index     :: "index.ts"           -- re-exports
+  }
 
-**Why it's wrong:**
-- Breaks the `Component.tsx` + `Component.vm.ts` convention
-- Makes VMs harder to find and maintain
-- Mixes rendering logic with state management
-- Prevents proper code organization
-
-**File structure convention:**
-```
-components/
-  MyComponent/
-    MyComponent.tsx      # Pure renderer - uses useVM, useAtomValue
-    MyComponent.vm.ts    # VM definition - interface, tag, layer
-    index.ts
-```
-
-**What to do:**
-1. Create a `ComponentName.vm.ts` file alongside your component
-2. Move the VM interface, tag, and layer to the `.vm.ts` file
-3. Export as `default { tag, layer }` from the VM file
-4. Import in component: `import MyComponentVM from "./MyComponent.vm"`
-
-**VM file template:**
-```typescript
-// MyComponent.vm.ts
-import * as Atom from "@effect-atom/atom/Atom"
-import { AtomRegistry } from "@effect-atom/atom/Registry"
-import { Context, Layer, Effect, pipe } from "effect"
-
-// 1. Interface
-export interface MyComponentVM {
-  readonly state$: Atom.Atom<State>
-  readonly action: () => void
-}
-
-// 2. Tag
-export const MyComponentVM = Context.GenericTag<MyComponentVM>("MyComponentVM")
-
-// 3. Layer
-const layer = Layer.effect(MyComponentVM, Effect.gen(function* () {
-  const registry = yield* AtomRegistry
-  // ... implementation
-}))
-
-// 4. Default export
-export default { tag: MyComponentVM, layer }
+-- VM file structure
+data VMFile a = VMFile
+  { interface :: Interface a          -- type contract
+  , tag       :: GenericTag a         -- DI tag
+  , layer     :: Layer a              -- implementation
+  }
 ```
 
-Invoke the `react-vm` skill for full implementation guidance.
+```haskell
+-- Anti-pattern: VM in component file
+bad :: "Component.tsx"
+bad = do
+  interface ComponentVM { ... }       -- ✗ wrong file
+  ComponentVM = GenericTag<...>       -- ✗ wrong file
+  layer = Layer.effect(...)           -- ✗ wrong file
+
+-- Correct: VM in dedicated file
+good :: "Component.vm.ts"
+good = do
+  interface ComponentVM { ... }       -- ✓ correct file
+  ComponentVM = GenericTag<...>       -- ✓ correct file
+  layer = Layer.effect(...)           -- ✓ correct file
+  export default { tag, layer }       -- ✓ clean export
+
+-- Import in component
+import ComponentVM from "./Component.vm"
+```
+
+VMs must be in `.vm.ts` files. Mixing rendering and state management breaks organization. Invoke `react-vm` skill for guidance.
