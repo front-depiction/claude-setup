@@ -215,54 +215,110 @@ export default function Wallet() {
 
 ---
 
-## Core Pattern: Either + Void Side Effects
+## Core Pattern: Atom.fn for Async Actions
 
-**Key insight**: Instead of async functions that return data, we use:
-1. An `Either` atom holding the current state (`Left` = loading, `Right` = data)
-2. Void-returning actions that update the atom as a side effect
-
-This decouples the UI from async timing—components subscribe to atoms, not promises.
+**Key insight**: Use `Atom.fn` with `Effect.fnUntraced` for effect-based actions. This gives you:
+1. Automatic `waiting` flag for loading state
+2. `Result<Success, Error>` with Initial/Success/Failure states
+3. No manual state management or void wrappers
 
 ```tsx
-import { Either, Effect, pipe } from "effect"
-import * as DateTime from "effect/DateTime"
+import { Atom, useAtomValue, useAtomSet } from "@effect-atom/atom-react"
+import * as Result from "@effect-atom/atom/Result"
+import { Effect, Exit } from "effect"
 
-// Loading state type
-type Loading = { readonly _tag: "Loading"; readonly since: DateTime.Utc }
-
-// State atom: Either<Loading, Data>
-const consentsState$ = Atom.make<Either.Either<Consent[], Loading>>(
-  Either.left({ _tag: "Loading", since: DateTime.unsafeNow() })
+// Define action with Atom.fn + Effect.fnUntraced
+const refreshAtom = Atom.fn(
+  Effect.fnUntraced(function* () {
+    const consents = yield* consentService.getOwnConsents
+    return consents
+  })
 )
 
-// Action: void-returning, updates atom as side effect
-const refresh = (): void => {
-  // 1. Set loading state immediately
-  registry.set(consentsState$, Either.left({ _tag: "Loading", since: DateTime.unsafeNow() }))
+// In component - useAtom for result and trigger
+function ConsentList() {
+  const [result, refresh] = useAtom(refreshAtom)
 
-  // 2. Fire-and-forget async operation using Effect.asVoid
-  pipe(
-    consentService.getOwnConsents,
-    Effect.tap((consents) => Effect.sync(() => {
-      registry.set(consentsState$, Either.right(consents))
-    })),
-    Effect.asVoid,        // Discard result, we care about the side effect
-    Effect.runPromise
+  // result.waiting is true while the effect runs
+  const isLoading = result.waiting
+
+  return (
+    <div>
+      <button onClick={() => refresh()} disabled={isLoading}>
+        {isLoading ? "Loading..." : "Refresh"}
+      </button>
+      {Result.matchWithWaiting(result, {
+        onWaiting: () => <Loading />,
+        onSuccess: ({ value }) => <List items={value} />,
+        onError: (error) => <Error message={String(error)} />,
+        onDefect: (defect) => <Error message={String(defect)} />
+      })}
+    </div>
   )
 }
-
-// UI subscribes to atom, matches on Either
-Either.match(useAtomValue(consents$), {
-  onLeft: ({ since }) => <Spinner since={since} />,
-  onRight: (consents) => <ConsentList items={consents} />
-})
 ```
 
-**Why this pattern?**
-- UI never awaits—it reacts to atom changes
-- Actions are simple void functions (easy to call from onClick)
-- Loading/success/error states live in the atom, not scattered across component state
-- Multiple components can subscribe to the same atom
+**With services using Atom.runtime:**
+
+```tsx
+class ConsentService extends Effect.Service<ConsentService>()("ConsentService", {
+  effect: Effect.gen(function* () {
+    const getAll = Effect.succeed([{ id: "1", name: "Terms" }])
+    return { getAll } as const
+  }),
+}) {}
+
+const runtimeAtom = Atom.runtime(ConsentService.Default)
+
+const refreshAtom = runtimeAtom.fn(
+  Effect.fnUntraced(function* () {
+    const service = yield* ConsentService
+    return yield* service.getAll
+  })
+)
+```
+
+**With promiseExit for async handlers:**
+
+```tsx
+function CreateUser() {
+  // mode: "promiseExit" returns Promise<Exit<...>> for await
+  const createUser = useAtomSet(createUserAtom, { mode: "promiseExit" })
+
+  return (
+    <button onClick={async () => {
+      const exit = await createUser("John")
+      if (Exit.isSuccess(exit)) {
+        console.log(exit.value)
+      }
+    }}>
+      Create
+    </button>
+  )
+}
+```
+
+**Anti-pattern: Manual void wrappers**
+
+```typescript
+// ❌ DON'T - manual state management loses waiting control
+const loading$ = Atom.make(false)
+const data$ = Atom.make<Data | null>(null)
+
+const refresh = (): void => {
+  registry.set(loading$, true)
+  Effect.runPromise(fetchData).then(data => {
+    registry.set(data$, data)
+    registry.set(loading$, false)
+  })
+}
+
+// ✅ DO - Atom.fn handles everything
+const refreshAtom = Atom.fn(Effect.fnUntraced(function* () {
+  return yield* fetchData
+}))
+// result.waiting, Result.matchWithWaiting - all built-in
+```
 
 ---
 
@@ -461,10 +517,11 @@ describe("WalletVM", () => {
 ## Best Practices
 
 **Core Pattern**
-- Actions return `void`—never return data or promises to UI
-- Use `Either<Loading, Data>` atoms for async state
-- Use `Effect.asVoid` + `Effect.runPromise` for fire-and-forget
-- UI subscribes to atoms, never awaits actions
+- Use `Atom.fn()` for async actions—gives you `AtomResultFn` with automatic `waiting` flag
+- Use `useAtom(action$)` to get `[result, trigger]` tuple
+- `Result.matchWithWaiting` for rendering async states (onWaiting/onSuccess/onError/onDefect)
+- `Result.match` for one-time builds like VM initialization (onInitial/onSuccess/onFailure)
+- Never manually wrap Effects in void functions—you lose `waiting` control
 
 **Naming & Structure**
 - Atoms use `camelCase$` suffix
