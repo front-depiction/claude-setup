@@ -178,7 +178,8 @@ const findContextFiles = Effect.gen(function* () {
               stat.type === "Directory" && !excludeDirs.has(entry)
                 ? Effect.suspend(() => searchDir(fullPath))
                 : Effect.succeed(Array.empty<string>())
-            )
+            ),
+            Effect.orElseSucceed(() => Array.empty<string>())
           )
         }),
         Effect.all,
