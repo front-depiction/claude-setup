@@ -95,31 +95,104 @@ export const userAtoms = Atom.family((userId: string) =>
 const userAtom = userAtoms(userId)
 ```
 
-## Pattern: Function Atoms (Side Effects)
+## Pattern: Atom.fn for Async Actions
 
-Use `Atom.fn` for operations with side effects:
+Use `Atom.fn` with `Effect.fnUntraced` for async operations:
+- Reading gives `Result<Success, Error>` with automatic `.waiting` flag
+- Triggering via `useAtomSet` runs the effect
 
 ```typescript
-import { Effect } from "effect"
+import { Atom, useAtomValue, useAtomSet } from "@effect-atom/atom-react"
+import { Effect, Exit } from "effect"
 
-// Function atom for side effects
-export const addItem = Atom.fn(
-  Effect.fnUntraced(function* (item: Item) {
-    const current = yield* Atom.get(cart)
-
-    yield* Atom.set(cart, {
-      items: [...current.items, item],
-      total: current.total + item.price
-    })
+// Atom.fn with Effect.fnUntraced for generator syntax
+const logAtom = Atom.fn(
+  Effect.fnUntraced(function* (arg: number) {
+    yield* Effect.log("got arg", arg)
   })
 )
 
-// Clear cart operation
-export const clearCart = Atom.fn(
-  Effect.fnUntraced(function* () {
-    yield* Atom.set(cart, { items: [], total: 0 })
+function LogComponent() {
+  // useAtomSet returns a trigger function
+  const logNumber = useAtomSet(logAtom)
+  return <button onClick={() => logNumber(42)}>Log 42</button>
+}
+```
+
+**With services using Atom.runtime:**
+
+```typescript
+class Users extends Effect.Service<Users>()("app/Users", {
+  effect: Effect.gen(function* () {
+    const create = (name: string) => Effect.succeed({ id: 1, name })
+    return { create } as const
+  }),
+}) {}
+
+const runtimeAtom = Atom.runtime(Users.Default)
+
+// runtimeAtom.fn provides service access
+const createUserAtom = runtimeAtom.fn(
+  Effect.fnUntraced(function* (name: string) {
+    const users = yield* Users
+    return yield* users.create(name)
   })
 )
+
+function CreateUserComponent() {
+  // mode: "promiseExit" for async handlers with Exit result
+  const createUser = useAtomSet(createUserAtom, { mode: "promiseExit" })
+  return (
+    <button onClick={async () => {
+      const exit = await createUser("John")
+      if (Exit.isSuccess(exit)) {
+        console.log(exit.value)
+      }
+    }}>
+      Create user
+    </button>
+  )
+}
+```
+
+**Reading result state:**
+
+```typescript
+function UserList() {
+  const [result, createUser] = useAtom(createUserAtom)  // Result<User, Error>
+
+  // Use matchWithWaiting for proper waiting state handling
+  return Result.matchWithWaiting(result, {
+    onWaiting: () => <Spinner />,
+    onSuccess: ({ value }) => <UserCard user={value} />,
+    onError: (error) => <Error message={String(error)} />,
+    onDefect: (defect) => <Error message={String(defect)} />
+  })
+}
+```
+
+**Anti-pattern: Manual void wrappers**
+
+```typescript
+// ❌ DON'T - manual state management loses waiting control
+const loading$ = Atom.make(false)
+const user$ = Atom.make<User | null>(null)
+
+const fetchUser = (id: string): void => {
+  registry.set(loading$, true)
+  Effect.runPromise(userService.getById(id)).then(user => {
+    registry.set(user$, user)
+    registry.set(loading$, false)
+  })
+}
+
+// ✅ DO - Atom.fn handles loading/success/failure automatically
+const fetchUserAtom = Atom.fn(
+  Effect.fnUntraced(function* (id: string) {
+    return yield* userService.getById(id)
+  })
+)
+// result.waiting, Result.match - all built-in
 ```
 
 ## Pattern: Runtime with Services
@@ -173,16 +246,17 @@ Atoms can return `Result` types for explicit error handling:
 import * as Result from "@effect-atom/atom/Result"
 
 export const userData = Atom.make<Result.Result<User, Error>>(
-  Result.initial
+  Result.initial()
 )
 
-// In component
+// In component - use matchWithWaiting for proper waiting state
 const result = useAtomValue(userData)
 
-Result.match(result, {
-  onInitial: () => <Loading />,
-  onFailure: (error) => <Error message={error.message} />,
-  onSuccess: (user) => <UserProfile user={user} />
+Result.matchWithWaiting(result, {
+  onWaiting: () => <Loading />,
+  onSuccess: ({ value }) => <UserProfile user={value} />,
+  onError: (error) => <Error message={String(error)} />,
+  onDefect: (defect) => <Error message={String(defect)} />
 })
 ```
 
@@ -316,40 +390,46 @@ export const wsConnection = Atom.make(
 
 ## Key Principles
 
-1. **Reference Stability**: Use `Atom.family` for dynamically generated atom sets
-2. **Lazy Evaluation**: Values computed on-demand when accessed
-3. **Automatic Cleanup**: Atoms reset when unused (unless `keepAlive`)
-4. **Derive, Don't Coordinate**: Use computed atoms to derive state
-5. **Result Types**: Handle errors explicitly with Result.match
-6. **Services in Runtime**: Wrap layers once, use in multiple atoms
-7. **Immutable Updates**: Always create new values, never mutate
-8. **Scoped Effects**: Leverage finalizers for resource cleanup
+1. **Atom.fn for Async**: Use `Atom.fn()` for effects—gives automatic `waiting` flag and `Result` type
+2. **Never Manual Void Wrappers**: Don't wrap Effects in void functions—you lose `waiting` control
+3. **Reference Stability**: Use `Atom.family` for dynamically generated atom sets
+4. **Lazy Evaluation**: Values computed on-demand when accessed
+5. **Automatic Cleanup**: Atoms reset when unused (unless `keepAlive`)
+6. **Derive, Don't Coordinate**: Use computed atoms to derive state
+7. **Result Types**: Handle errors explicitly with Result.match
+8. **Services in Runtime**: Wrap layers once, use in multiple atoms
+9. **Immutable Updates**: Always create new values, never mutate
+10. **Scoped Effects**: Leverage finalizers for resource cleanup
 
 ## Common Patterns
 
 ### Loading States
 
+Use `Atom.fn` with `Effect.fnUntraced` which automatically provides `Result` with `.waiting` flag:
+
 ```typescript
-export const userDataAtom = Atom.make<Result.Result<User, Error>>(
-  Result.initial
-)
+import { Atom, useAtomValue, useAtomSet } from "@effect-atom/atom-react"
+import { Effect } from "effect"
 
-export const loadUser = runtime.fn(
+// Atom.fn handles loading/success/failure automatically
+const loadUserAtom = Atom.fn(
   Effect.fnUntraced(function* (id: string) {
-    yield* Atom.set(userDataAtom, Result.initial)
-
-    const result = yield* Effect.either(
-      userService.fetchUser(id)
-    )
-
-    yield* Atom.set(
-      userDataAtom,
-      result._tag === "Right"
-        ? Result.success(result.right)
-        : Result.failure(result.left)
-    )
+    return yield* userService.fetchUser(id)
   })
 )
+
+// In component
+function UserProfile() {
+  const [result, loadUser] = useAtom(loadUserAtom)
+
+  // Use matchWithWaiting for proper waiting state handling
+  return Result.matchWithWaiting(result, {
+    onWaiting: () => <Loading />,
+    onSuccess: ({ value }) => <UserCard user={value} />,
+    onError: (error) => <Error message={String(error)} />,
+    onDefect: (defect) => <Error message={String(defect)} />
+  })
+}
 ```
 
 ### Optimistic Updates
