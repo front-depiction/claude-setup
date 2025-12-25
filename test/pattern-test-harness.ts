@@ -27,6 +27,39 @@ const inferFilePathFromGlob = (glob?: string): string => {
   return "test.ts"
 }
 
+export interface BashPatternTestConfig {
+  name: string
+  decision: "ask" | "deny"
+  shouldMatch: string[]
+  shouldNotMatch: string[]
+}
+
+export const testBashPattern = (config: BashPatternTestConfig) => {
+  describe(config.name, () => {
+    it.each(config.shouldMatch)("should match: %s", async (command) => {
+      const input = JSON.stringify({
+        hook_event_name: "PreToolUse",
+        tool_name: "Bash",
+        tool_input: { command }
+      })
+      const result = await $`echo ${input} | CLAUDE_PROJECT_DIR=${projectRoot} bun run ${projectRoot}/.claude/hooks/pattern-detector/index.ts`.text().catch(() => "")
+      expect(result).toContain(`"permissionDecision":"${config.decision}"`)
+    })
+
+    if (config.shouldNotMatch.length > 0) {
+      it.each(config.shouldNotMatch)("should NOT match: %s", async (command) => {
+        const input = JSON.stringify({
+          hook_event_name: "PreToolUse",
+          tool_name: "Bash",
+          tool_input: { command }
+        })
+        const result = await $`echo ${input} | CLAUDE_PROJECT_DIR=${projectRoot} bun run ${projectRoot}/.claude/hooks/pattern-detector/index.ts`.text().catch(() => "")
+        expect(result).not.toContain("permissionDecision")
+      })
+    }
+  })
+}
+
 export const testPattern = (config: PatternTestConfig) => {
   const tags = Array.isArray(config.tag) ? config.tag : [config.tag]
   const filePath = inferFilePathFromGlob(config.glob)
