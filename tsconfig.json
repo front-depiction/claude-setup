@@ -19,7 +19,9 @@
   "include": [
     "hooks/**/*.ts",
     "scripts/**/*.ts",
-    "skills/**/*.ts"
+    "skills/**/*.ts",
+    "patterns/**/*.ts",
+    "test/**/*.ts"
   ],
   "exclude": [
     "node_modules",
