@@ -7,7 +7,7 @@ description: View Model definitions must be in .vm.ts files - detected VM patter
 glob: "**/!(*.vm).{ts,tsx}"
 pattern: (interface\s+\w+VM\s*\{|Context\.GenericTag<\w*VM>|Layer\.(effect|scoped)\(\s*\w+VM)
 tag: vm-location
-level: error
+level: critical
 ---
 
 # VM Code in Wrong File

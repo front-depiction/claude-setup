@@ -5,7 +5,7 @@ event: PostToolUse
 name: effect-catchall-default
 description: Avoid Effect.catchAll returning defaults - often hides bugs
 glob: "**/*.{ts,tsx}"
-pattern: Effect\.catchAll\([^)]*=>\s*(Effect\.)?(succeed|sync)\(
+pattern: Effect\.catchAll\(.*?=>\s*(Effect\.)?(succeed|sync)\(
 tag: avoid-catchall-default
 level: warning
 ---

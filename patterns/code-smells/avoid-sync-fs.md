@@ -7,7 +7,7 @@ description: Avoid synchronous filesystem operations
 glob: "**/*.{ts,tsx}"
 pattern: (readFileSync|writeFileSync|mkdirSync|readdirSync|statSync|existsSync|copyFileSync|unlinkSync|rmdirSync|renameSync|appendFileSync)\s*\(
 tag: no-sync-fs
-level: error
+level: high
 ---
 
 # Avoid Synchronous Filesystem Operations

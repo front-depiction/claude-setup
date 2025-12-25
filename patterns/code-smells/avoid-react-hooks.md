@@ -7,7 +7,7 @@ description: React hooks (useState, useEffect, useReducer, etc.) should be avoid
 glob: "**/*.{ts,tsx}"
 pattern: \b(useState|useEffect|useReducer|useCallback|useMemo|useRef|useLayoutEffect|useImperativeHandle|useDebugValue|useDeferredValue|useTransition|useId|useSyncExternalStore|useInsertionEffect)\s*[<(]
 tag: avoid-react-hooks
-level: error
+level: high
 ---
 
 # Avoid React Hooks - Use View Models
