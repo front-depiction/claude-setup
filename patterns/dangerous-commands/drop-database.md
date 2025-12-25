@@ -3,7 +3,7 @@ tool: Bash
 event: PreToolUse
 name: drop-database
 description: SQL commands that drop databases or tables
-pattern: (DROP\s+(DATABASE|TABLE|SCHEMA)|TRUNCATE\s+TABLE)
+pattern: ^(?!(echo|grep|cat|less|more|head|tail|sed|awk|print)\s).*(DROP\s+(DATABASE|TABLE|SCHEMA)|TRUNCATE\s+TABLE)
 level: critical
 action: ask
 ---

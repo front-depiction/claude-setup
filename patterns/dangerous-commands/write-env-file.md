@@ -2,8 +2,9 @@
 event: PreToolUse
 name: write-env-file
 description: Writing to .env files that may contain secrets
-pattern: \.env(\.|$)
 tool: Write
+glob: "**/.env?(.local|.production|.development|.staging|.test)"
+pattern: "."
 level: medium
 action: ask
 ---
