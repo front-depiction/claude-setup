@@ -12,7 +12,7 @@
  * @since 1.0.0
  */
 
-import { Effect, Console, Context, Layer, Data, Schema, pipe, Config } from "effect"
+import { Effect, Console, Context, Layer, Data, Schema, pipe, Config, Array as Arr } from "effect"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Command, CommandExecutor } from "@effect/platform"
 
@@ -21,6 +21,16 @@ const AgentConfigSchema = Schema.Struct({
 })
 
 type AgentConfigData = Schema.Schema.Type<typeof AgentConfigSchema>
+
+const MiseTask = Schema.Struct({
+  name: Schema.String,
+  description: Schema.String,
+})
+
+const MiseTasks = Schema.Array(MiseTask)
+
+const formatMiseTasks = (tasks: typeof MiseTasks.Type): string =>
+  Arr.map(tasks, t => `${t.name}: ${t.description}`).join("\n")
 
 export class AgentConfigError extends Data.TaggedError("AgentConfigError")<{
   readonly reason: string
@@ -60,7 +70,7 @@ const program = Effect.gen(function* () {
   const config = yield* AgentConfig
   const commandExecutor = yield* CommandExecutor.CommandExecutor
 
-  const [moduleSummary, projectVersion, latestCommit, previousCommits] = yield* Effect.all([
+  const [moduleSummary, projectVersion, latestCommit, previousCommits, packageScripts, miseTasks] = yield* Effect.all([
     pipe(
       Command.make("bun", ".claude/scripts/context-crawler.ts", "--summary"),
       Command.workingDirectory(config.projectDir),
@@ -76,7 +86,6 @@ const program = Effect.gen(function* () {
       Effect.catchAll(() => Effect.succeed("unknown")),
       Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
     ),
-    // Latest commit: full details with body and files touched
     pipe(
       Command.make("git", "show", "HEAD", "--stat", "--format=%h %s%n%n%b"),
       Command.workingDirectory(config.projectDir),
@@ -85,12 +94,28 @@ const program = Effect.gen(function* () {
       Effect.catchAll(() => Effect.succeed("")),
       Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
     ),
-    // Previous commits: one-line summaries
     pipe(
       Command.make("git", "log", "--oneline", "-4", "--skip=1"),
       Command.workingDirectory(config.projectDir),
       Command.string,
       Effect.map(s => s.trim()),
+      Effect.catchAll(() => Effect.succeed("")),
+      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+    ),
+    pipe(
+      Command.make("bun", "-e", "const p = require('./package.json'); console.log(Object.entries(p.scripts || {}).map(([k,v]) => k + ': ' + v).join('\\n'))"),
+      Command.workingDirectory(config.projectDir),
+      Command.string,
+      Effect.map(s => s.trim()),
+      Effect.catchAll(() => Effect.succeed("")),
+      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+    ),
+    pipe(
+      Command.make("mise", "tasks", "--json"),
+      Command.workingDirectory(config.projectDir),
+      Command.string,
+      Effect.flatMap(s => Schema.decodeUnknown(MiseTasks)(JSON.parse(s))),
+      Effect.map(formatMiseTasks),
       Effect.catchAll(() => Effect.succeed("")),
       Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
     )
@@ -248,6 +273,15 @@ ${moduleSummary}
 Run /module [path] to get full context for any module listed above.
 Run /module-search [pattern] to find modules by keyword.
 </module-discovery>
+
+<available-scripts>
+<package-json>
+${packageScripts || "(none)"}
+</package-json>
+<mise-tasks>
+${miseTasks || "(none)"}
+</mise-tasks>
+</available-scripts>
 
 <commands>/modules /module [path] /module-search [pattern]</commands>
 </subagent-context>`

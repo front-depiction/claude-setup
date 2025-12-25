@@ -5,7 +5,7 @@ event: PostToolUse
 name: avoid-try-catch
 description: Avoid try-catch blocks in Effect code - use Effect.try or typed errors
 glob: "**/*.{ts,tsx}"
-pattern: "try\\s*\\{"
+pattern: try\s*\{
 tag: avoid-try-catch
 level: warning
 ---
