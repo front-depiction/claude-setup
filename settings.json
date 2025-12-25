@@ -1,15 +1,4 @@
 {
-  "version": "1.0.0",
-  "project": {
-    "name": "Effect TypeScript Project",
-    "description": "Functional programming with Effect TypeScript"
-  },
-  "defaults": {
-    "model": "sonnet"
-  },
-  "agents": {
-    "autoInvoke": true
-  },
   "permissions": {
     "allow": [
       "Bash(bunx tsc:*)",
@@ -28,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-init.sh"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/agent-init/run.sh"
           }
         ]
       }
@@ -38,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/skill-suggester.sh"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/skill-suggester/run.sh"
           }
         ]
       }
@@ -49,7 +38,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-init.sh"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-init/run.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pattern-detector/run.sh"
           }
         ]
       }
@@ -60,12 +58,26 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/smell-detector.sh"
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pattern-detector/run.sh"
           }
         ]
       }
     ],
     "Stop": [],
     "SubagentStop": []
+  },
+  "version": "1.0.0",
+  "project": {
+    "name": "Effect TypeScript Project",
+    "description": "Functional programming with Effect TypeScript"
+  },
+  "defaults": {
+    "model": "sonnet"
+  },
+  "agents": {
+    "autoInvoke": true
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true
   }
 }
