@@ -5,7 +5,7 @@ event: PostToolUse
 name: avoid-untagged-errors
 description: Avoid instanceof Error and new Error - use Data.TaggedError for typed errors
 glob: "**/*.{ts,tsx}"
-pattern: "(instanceof\\s+Error|new\\s+Error\\s*\\()"
+pattern: (instanceof\s+Error|new\s+Error\s*\()
 tag: avoid-untagged-errors
 level: warning
 ---

@@ -7,7 +7,7 @@ description: Use FileSystem service instead of direct Node.js fs imports
 glob: "**/*.{ts,tsx}"
 pattern: (import\s+.*\s+from\s+['"]node:fs['"]|import\s+.*\s+from\s+['"]fs['"]|require\(['"]node:fs['"]\)|require\(['"]fs['"]\))
 tag: use-effect-filesystem
-level: error
+level: high
 ---
 
 # Use FileSystem Service Instead of `fs`

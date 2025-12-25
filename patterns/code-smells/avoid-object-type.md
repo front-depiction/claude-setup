@@ -5,7 +5,7 @@ event: PostToolUse
 name: avoid-object-type
 description: Avoid using Object or {} as types
 glob: "**/*.{ts,tsx}"
-pattern: :\s*(Object|{})\s*[,;\)\]\|&]
+pattern: (?::\s*|=\s*)(Object|{})\s*(?=[,;\)\]\|&=<>\s\[])
 tag: do-not-use-object-type
 level: warning
 ---

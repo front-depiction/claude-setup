@@ -24,13 +24,17 @@ type AgentConfigData = Schema.Schema.Type<typeof AgentConfigSchema>
 
 const MiseTask = Schema.Struct({
   name: Schema.String,
+  aliases: Schema.Array(Schema.String),
   description: Schema.String,
 })
 
 const MiseTasks = Schema.Array(MiseTask)
 
 const formatMiseTasks = (tasks: typeof MiseTasks.Type): string =>
-  Arr.map(tasks, t => `${t.name}: ${t.description}`).join("\n")
+  Arr.map(tasks, t => {
+    const aliases = t.aliases.length > 0 ? ` (${t.aliases.join(", ")})` : ""
+    return `${t.name}${aliases}: ${t.description}`
+  }).join("\n")
 
 export class AgentConfigError extends Data.TaggedError("AgentConfigError")<{
   readonly reason: string
@@ -192,7 +196,7 @@ export const program = Effect.gen(function* () {
       Command.make("mise", "tasks", "--json"),
       Command.workingDirectory(config.projectDir),
       Command.string,
-      Effect.flatMap(s => Schema.decodeUnknown(MiseTasks)(JSON.parse(s))),
+      Effect.flatMap(s => Schema.decodeUnknown(Schema.parseJson(MiseTasks))(s)),
       Effect.map(formatMiseTasks),
       Effect.catchAll(() => Effect.succeed("")),
       Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)

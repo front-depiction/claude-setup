@@ -7,7 +7,7 @@ description: Consider using Schema.parseJson instead of direct JSON methods
 glob: "**/*.{ts,tsx}"
 pattern: JSON\.(parse|stringify)\(
 tag: prefer-schema-json
-level: log
+level: info
 ---
 
 # Consider Schema.parseJson Instead of JSON Methods
