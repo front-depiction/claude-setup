@@ -23,6 +23,51 @@ interface SkillMetadata {
   readonly keywords: ReadonlyArray<string>
 }
 
+const MiseTask = Schema.Struct({
+  name: Schema.String,
+  aliases: Schema.Array(Schema.String),
+  description: Schema.String,
+})
+
+const MiseTasks = Schema.Array(MiseTask)
+
+const formatMiseTasks = (tasks: typeof MiseTasks.Type): string =>
+  Array.map(tasks, t => {
+    const aliases = t.aliases.length > 0 ? ` (${t.aliases.join(", ")})` : ""
+    return `${t.name}${aliases}: ${t.description}`
+  }).join("\n")
+
+const SCRIPT_TRIGGER_KEYWORDS = new Set([
+  "run", "test", "build", "typecheck", "type check", "check", "dev",
+  "start", "lint", "format", "ci", "mise", "script", "npm", "bun",
+  "execute", "clean", "reset", "sync", "deploy", "preview", "commit"
+])
+
+const shouldShowMiseTasks = (prompt: string): boolean => {
+  const lowered = prompt.toLowerCase()
+  for (const keyword of SCRIPT_TRIGGER_KEYWORDS) {
+    if (lowered.includes(keyword)) return true
+  }
+  return false
+}
+
+const fetchMiseTasks = (cwd: string) =>
+  Effect.gen(function* () {
+    const commandExecutor = yield* CommandExecutor.CommandExecutor
+
+    const result = yield* pipe(
+      Command.make("mise", "tasks", "--json"),
+      Command.workingDirectory(cwd),
+      Command.string,
+      Effect.flatMap(s => Schema.decodeUnknown(Schema.parseJson(MiseTasks))(s)),
+      Effect.map(formatMiseTasks),
+      Effect.catchAll(() => Effect.succeed("")),
+      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+    )
+
+    return String.isNonEmpty(result) ? Option.some(result) : Option.none()
+  })
+
 const parseFrontmatter = (content: string): Record.ReadonlyRecord<string, string> => {
   const frontmatterRegex = /^---\n([\s\S]*?)\n---/
   const match = content.match(frontmatterRegex)
@@ -174,6 +219,10 @@ const program = Effect.gen(function* () {
   // Search for matching modules based on user input
   const moduleSearchResult = yield* searchModules(input.prompt, input.cwd)
 
+  // Fetch mise tasks if prompt indicates script execution intent
+  const miseTasksResult = shouldShowMiseTasks(input.prompt)
+    ? yield* fetchMiseTasks(input.cwd)
+    : Option.none<string>()
 
   // Build context parts
   const parts: string[] = []
@@ -186,6 +235,14 @@ const program = Effect.gen(function* () {
   // Always show matching modules if found
   if (Option.isSome(moduleSearchResult)) {
     parts.push(`<relevant-modules>\n${moduleSearchResult.value}\n</relevant-modules>`)
+  }
+
+  // Show mise tasks when user indicates script execution intent
+  if (Option.isSome(miseTasksResult)) {
+    parts.push(`<available-scripts>
+Run these with: mise run <task-name>
+${miseTasksResult.value}
+</available-scripts>`)
   }
 
   // Always: Remind about context efficiency
