@@ -5,6 +5,11 @@ Effect<Success, Error, Requirements>
 
 a |> f |> g |> h  ≡  pipe(a, f, g, h)
 f ∘ g ∘ h         ≡  flow(f, g, h)
+f(g(x))           →  pipe(x, g, f)           -- avoid nested calls
+
+dual :: (self, that) ↔ (that)(self)
+pipe(x, f(y))     ≡  f(x, y)                 -- data-last in pipelines
+f(x, y)           →  pipe(x, f(y))           -- prefer pipeline form
 
 ∥(a, b, c)        ≡  Effect.all([a, b, c], { concurrency: "unbounded" })
 
