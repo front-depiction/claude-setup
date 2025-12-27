@@ -265,16 +265,84 @@ delegate task
 -- self = coordinator, ¬implementer
 </delegation_strategy>`)
 
-  // Always: Delegation prompting guidance
+  // Always: Delegation prompting guidance with gates
   parts.push(`<delegation_prompts>
 prompt :: Agent → Task → Effect ()
 prompt agent task = do
-  specify (what task)              -- clear objective
+  -- Objective specification
+  specify (what task)              -- clear deliverable
   specify (how task)               -- high-level approach
-  direct agent "/modules"          -- check patterns
-  direct agent ".context/"         -- check decisions
-  direct agent "/typecheck dir"    -- validate incrementally, not globally
+  specify (scope task)             -- files/packages in scope
+
+  -- Context references (agent reads, orchestrator never opens)
+  direct agent "/modules"          -- patterns to follow
+  direct agent ".context/"         -- reference implementations
+  direct agent (files task)        -- specific files to read
+
+  -- Gates (agent must pass before reporting success)
+  establish (gate₁ task)           -- types pass: /typecheck dir
+  establish (gate₂ task)           -- tests pass: mise run test:pkg
+
+  -- Lane structure
+  specify (steps task)             -- sequence of gated substeps
+  specify (gate step)              -- each step's success criterion
+
+-- orchestrator: ¬read files, ¬open context
+-- orchestrator: reference paths, agent reads them
 </delegation_prompts>`)
+
+  // Always: Gates protocol
+  parts.push(`<gates_protocol>
+data Gate = TypesPass | TestsPass | Custom Condition
+
+gate :: Gate → Effect ()
+gate TypesPass = do
+  result ← "/typecheck" (scope task)     -- incremental, not global
+  case result of
+    Pass   → proceed
+    Fail e → storeErrors e >> fix >> gate TypesPass
+
+gate TestsPass = do
+  result ← "mise run test:" <> (package task)
+  case result of
+    Pass   → proceed
+    Fail e → fix >> gate TestsPass
+
+storeErrors :: Errors → Effect ()
+storeErrors errors = do
+  tree ← buildErrorTree errors           -- group by file, count
+  write ".claude/pre-types.json" tree    -- persist for visibility
+
+-- success := TypesPass ∧ TestsPass
+-- report success only when both gates pass
+-- never skip gates, never report partial success
+</gates_protocol>`)
+
+  // Always: Lane subdivision
+  parts.push(`<lane_structure>
+data Lane = Lane
+  { name  :: String
+  , steps :: [Step]
+  }
+
+data Step = Step
+  { action :: Task
+  , gate   :: Gate
+  }
+
+execute :: Lane → Effect ()
+execute lane = traverse_ executeStep (steps lane)
+  where
+    executeStep step = do
+      result ← action step
+      verify (gate step)               -- must pass before next step
+      pure result
+
+-- lanes: parallel units of work (independent)
+-- steps: sequential within a lane (dependent)
+-- each step gated before proceeding
+-- no maximum steps, but each must be logical unit
+</lane_structure>`)
 
   // Always: Remind about concurrency
   parts.push(`<parallel_execution>
