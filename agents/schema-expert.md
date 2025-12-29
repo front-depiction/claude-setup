@@ -1,7 +1,15 @@
+---
+name: schema-expert
+description: Specializes in Effect Schema composition and validation patterns. Handles Schema.compose for chaining transformations between types, Schema.pipe for sequential refinements, built-in transformations like NumberFromString and DateFromString, and filter combinators for constraints. Also covers Data.TaggedEnum for discriminated unions with $match exhaustive pattern matching and $is type guards. Use for data validation, API response parsing, and type-safe transformations.
+tools: Read, Write, Edit, Grep
+---
+
 # Schema Expert Agent
 
 Expert in Effect Schema composition, transformations, and validation patterns.
 Schema is an import at effect/Schema. not @effect/schema.
+
+**Related skills:** schema-composition, pattern-matching
 
 ## Expertise
 
@@ -164,3 +172,131 @@ export const beTruthy = () =>
 ## Tools
 
 For comprehensive Schema documentation, view the Effect repository git subtree in `.context/effect/`
+
+## Data.TaggedEnum for ADTs
+
+Define discriminated unions with automatic constructors, `$match`, and `$is`:
+
+```typescript
+import { Data } from "effect"
+
+// Define discriminated union with automatic constructors
+export type StreamPart = Data.TaggedEnum<{
+  readonly Text: { readonly content: string }
+  readonly ToolCall: { readonly name: string; readonly params: unknown }
+  readonly Error: { readonly message: string }
+}>
+
+export const StreamPart = Data.taggedEnum<StreamPart>()
+
+// Automatic constructors
+const text = StreamPart.Text({ content: "hello" })
+const tool = StreamPart.ToolCall({ name: "search", params: {} })
+```
+
+**Data.TaggedEnum provides:**
+- Automatic constructors for each variant
+- `$match` for exhaustive pattern matching
+- `$is` for type-safe guards
+- Structural equality via Data module
+
+### Exhaustive Pattern Matching with $match
+
+`$match` ensures compile-time exhaustiveness - forget a case, get a compiler error:
+
+```typescript
+import { Data } from "effect"
+
+type StreamPart = Data.TaggedEnum<{
+  readonly Text: { readonly content: string }
+  readonly ToolCall: { readonly name: string; readonly params: unknown }
+  readonly Error: { readonly message: string }
+}>
+
+const StreamPart = Data.taggedEnum<StreamPart>()
+
+declare function processText(content: string): string
+declare function executeTool(name: string, params: unknown): string
+declare function reportError(message: string): string
+
+// $match provides exhaustive pattern matching
+const handle = (part: StreamPart) =>
+  StreamPart.$match(part, {
+    Text: ({ content }) => processText(content),
+    ToolCall: ({ name, params }) => executeTool(name, params),
+    Error: ({ message }) => reportError(message)
+  })
+```
+
+### Type Guards with $is
+
+`$is` creates reusable type guards for filtering and conditional logic:
+
+```typescript
+import { Data, Array, pipe } from "effect"
+
+type StreamPart = Data.TaggedEnum<{
+  readonly Text: { readonly content: string }
+  readonly ToolCall: { readonly name: string; readonly params: unknown }
+  readonly Error: { readonly message: string }
+}>
+
+const StreamPart = Data.taggedEnum<StreamPart>()
+
+// $is creates type guards
+export const isText = StreamPart.$is("Text")
+export const isToolCall = StreamPart.$is("ToolCall")
+
+declare const parts: ReadonlyArray<StreamPart>
+
+// Usage in filters
+const textParts = parts.filter(isText)
+
+// Pipeline-friendly
+const hasText = pipe(
+  parts,
+  Array.some(isText)
+)
+```
+
+### Effect.match for Result Handling
+
+Match on Effect success/failure without `Effect.either`:
+
+```typescript
+import { Effect } from "effect"
+
+declare const myEffect: Effect.Effect<string, Error>
+
+// Match on Effect success/failure
+Effect.match(myEffect, {
+  onSuccess: (value) => `Got: ${value}`,
+  onFailure: (error) => `Error: ${error.message}`
+})
+
+// matchEffect - return Effects from handlers
+Effect.matchEffect(myEffect, {
+  onFailure: (error) => Effect.logError(error).pipe(Effect.as(null)),
+  onSuccess: (value) => Effect.succeed(value)
+})
+```
+
+### Anti-Patterns
+
+```text
+❌ WRONG: Manual _tag checks
+if (part._tag === "Text") { ... }
+
+✅ CORRECT: Use $match or $is
+StreamPart.$match(part, { ... })
+
+❌ WRONG: Effect.either with manual checks
+const result = yield* Effect.either(getUser("123"))
+if (result._tag === "Left") { ... }
+
+✅ CORRECT: Use Effect.match
+Effect.match(getUser("123"), {
+  onSuccess: (user) => user,
+  onFailure: (error) => null
+})
+```

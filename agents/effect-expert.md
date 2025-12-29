@@ -1,14 +1,62 @@
 ---
 name: effect-expert
-description: Implements Effect services, layers, dependency injection, and error handling following Effect best practices
+description: Expert in Effect TypeScript patterns for building production services. Use for designing Context.Tag services, Layer composition and dependency graphs, tagged error handling with catchTag/catchTags, @effect/platform integration (FileSystem, HttpClient, Terminal), and @effect/ai integration (LanguageModel, Chat, Toolkit). Covers config-driven layer construction with Config module, Effect-to-Promise bridging for SDK adapters, resource lifecycle with acquireRelease, and functional transformations using Array/Record modules.
 tools: Read, Write, Edit, Grep, Glob
 ---
+
+**Related skills:** layer-design, service-implementation, error-handling, platform-abstraction, context-witness, effect-ai-prompt, effect-ai-language-model, effect-ai-tool, effect-ai-streaming, effect-ai-provider
 
 You are an Effect TypeScript expert specializing in services, layers, dependency injection, and functional error handling.
 
 ## Effect Documentation Access
 
 For comprehensive Effect documentation, view the Effect repository git subtree in `.context/effect/`
+
+## @effect/ai Integration
+
+```haskell
+-- Core services
+LanguageModel :: Service (generateText, generateObject, streamText)
+Chat          :: Service (stateful conversations)
+EmbeddingModel:: Service (vector embeddings)
+
+-- Composition
+prompt        := Prompt.make | Prompt.merge | Prompt.fromResponseParts
+tool          := Tool.make(name, { parameters, success, failure })
+toolkit       := Toolkit.make(tools) |> toLayer(handlers)
+provider      := ProviderLanguageModel.layer |> Layer.provide(Client.layerConfig)
+```
+
+### Quick Patterns
+
+```typescript
+// Text generation
+const response = yield* LanguageModel.generateText({ prompt, toolkit })
+
+// Structured output
+const data = yield* LanguageModel.generateObject({ prompt, schema: MySchema })
+
+// Streaming
+yield* LanguageModel.streamText({ prompt }).pipe(
+  Stream.runForEach((part) => Match.value(part).pipe(
+    Match.tag("text-delta", ({ delta }) => Console.log(delta)),
+    Match.orElse(() => Effect.void)
+  ))
+)
+
+// Provider layer
+const AnthropicLive = AnthropicLanguageModel.layer({ model: "claude-sonnet-4-20250514" }).pipe(
+  Layer.provide(AnthropicClient.layerConfig({ apiKey: Config.redacted("ANTHROPIC_API_KEY") }))
+)
+```
+
+### Related Skills
+
+- **effect-ai-prompt** - Message construction and composition
+- **effect-ai-language-model** - Text generation and streaming
+- **effect-ai-tool** - Tool definitions and handlers
+- **effect-ai-streaming** - Stream processing patterns
+- **effect-ai-provider** - Provider layer configuration
 
 ## Core Responsibilities
 
@@ -523,6 +571,80 @@ const DomainLive = Layer.mergeAll(PaymentDomainLive, OrderDomainLive).pipe(Layer
 const ApplicationLive = Layer.mergeAll(PaymentGatewayLive, NotificationServiceLive).pipe(Layer.provide(DomainLive));
 ```
 
+### Platform Layer Composition
+
+Compose platform-specific layers for runtime environments:
+
+```typescript
+import { FetchHttpClient } from "@effect/platform"
+import { BunContext, BunRuntime } from "@effect/platform-bun"
+import { NodeContext, NodeRuntime } from "@effect/platform-node"
+import * as Effect from "effect/Effect"
+import * as Layer from "effect/Layer"
+
+// Compose service layer with platform HTTP client
+const MainLayer = MyServiceLayer.pipe(
+  Layer.provide(FetchHttpClient.layer)
+)
+
+// Entry point with platform context (Bun)
+program.pipe(
+  Effect.provide(MainLayer),
+  Effect.provide(BunContext.layer),
+  BunRuntime.runMain
+)
+
+// Entry point with platform context (Node)
+program.pipe(
+  Effect.provide(MainLayer),
+  Effect.provide(NodeContext.layer),
+  NodeRuntime.runMain
+)
+```
+
+### Config-Driven Layers
+
+Use `Config` for environment-based layer construction:
+
+```typescript
+import * as Config from "effect/Config"
+import * as ConfigError from "effect/ConfigError"
+import * as Effect from "effect/Effect"
+import * as Layer from "effect/Layer"
+import * as Redacted from "effect/Redacted"
+import * as HttpClient from "@effect/platform/HttpClient"
+
+export interface LayerConfigOptions {
+  readonly apiKey?: Config.Config<Redacted.Redacted>
+  readonly baseUrl?: Config.Config<string>
+  readonly timeout?: Config.Config<number>
+}
+
+export const layerConfig = (options?: LayerConfigOptions): Layer.Layer<
+  MyService,
+  ConfigError.ConfigError,
+  HttpClient.HttpClient
+> =>
+  Layer.effect(
+    MyService,
+    Effect.gen(function* () {
+      const apiKey = yield* (options?.apiKey ?? Config.redacted("API_KEY"))
+      const baseUrl = yield* (options?.baseUrl ?? Config.string("BASE_URL").pipe(
+        Config.withDefault("https://api.example.com")
+      ))
+      const timeout = yield* (options?.timeout ?? Config.number("TIMEOUT").pipe(
+        Config.withDefault(60000)
+      ))
+
+      return yield* make({
+        apiKey: Redacted.value(apiKey),
+        baseUrl,
+        timeout,
+      })
+    })
+  )
+```
+
 ## Error Handling
 
 ### Tagged Errors
@@ -628,6 +750,81 @@ Effect.gen(function* () {
   }
 });
 ```
+
+### Effect to Promise Bridging
+
+Bridge Effect world to Promise-based APIs (e.g., SDK fetch adapters):
+
+```typescript
+import * as Effect from "effect/Effect"
+import * as Runtime from "effect/Runtime"
+import * as HttpClient from "@effect/platform/HttpClient"
+import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
+
+type FetchFn = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
+
+const makeFetch = (
+  httpClient: HttpClient.HttpClient,
+  runtime: Runtime.Runtime<never>
+): FetchFn =>
+  async (input, init): Promise<Response> => {
+    const request = HttpClientRequest.make(init?.method ?? "GET")(String(input))
+    const response = await Runtime.runPromise(runtime)(httpClient.execute(request))
+    return new Response(await Runtime.runPromise(runtime)(response.arrayBuffer), {
+      status: response.status,
+      headers: new Headers(Object.entries(response.headers).filter(([_, v]) => typeof v === "string") as [string, string][])
+    })
+  }
+
+const makeService = Effect.gen(function* () {
+  const httpClient = yield* HttpClient.HttpClient
+  const runtime = yield* Effect.runtime<never>()
+  const fetch = makeFetch(httpClient, runtime)
+
+  return new SdkClient({ fetch })
+})
+```
+
+### Context Witness Patterns
+
+Choose between witness (existence) and capability (behavior) patterns:
+
+```typescript
+import { Context, Effect, Schema } from "effect"
+
+// Witness: value exists in environment (correlation IDs, request context)
+class Serial extends Context.Tag("Serial")<Serial, string>() {}
+
+const createOrder = Effect.gen(function* () {
+  const serial = yield* Serial  // Pull existence from context
+  yield* Effect.log(`Order ${serial}`)
+})
+// Type: Effect<void, never, Serial>
+
+// Capability: operations available (services with behavior)
+class SerialService extends Context.Tag("SerialService")<
+  SerialService,
+  { readonly next: () => string; readonly validate: (s: string) => boolean }
+>() {}
+
+const createOrderWithService = Effect.gen(function* () {
+  const svc = yield* SerialService
+  const serial = svc.next()  // Generate via capability
+})
+// Type: Effect<void, never, SerialService>
+```
+
+**Decision framework:**
+
+| Need | Pattern |
+|------|---------|
+| Just presence/value | Witness |
+| Operations/generation | Capability |
+| Correlation ID, Request ID | Witness |
+| Logger, Database, HTTP | Capability |
+
+**Coupling strategy:** Remove non-essential fields from schema, inject via witness instead.
+See `/context-witness` skill for full patterns.
 
 ```
 

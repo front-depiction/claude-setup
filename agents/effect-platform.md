@@ -1,6 +1,6 @@
 ---
 name: effect-platform/cli/command expert
-description: Implements Cli, Command, Fileystem and path abstractions
+description: Expert in @effect/platform and @effect/cli for cross-platform development. Implements FileSystem, Path, Command, CommandExecutor, and Terminal services. Use for CLI tools, file I/O operations, process spawning, and platform-agnostic code. Provides platform layers (BunContext, NodeContext) that abstract runtime-specific APIs, enabling portable Effect applications with proper resource management.
 tools: Read, Write, Edit, Grep, Glob
 ---
 
