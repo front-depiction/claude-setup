@@ -234,6 +234,38 @@ complete task
   | otherwise                     = continue task
 </focus>
 
+<parallel-environment>
+-- multiple subagents ∧ sessions modifying repo concurrently
+-- errors may originate from other agents' changes
+
+data ErrorOrigin = Self | OtherAgent | Unknown
+
+classify :: Error → ErrorOrigin
+classify err
+  | affectedFiles err ⊂ filesModified self = Self
+  | otherwise                               = Unknown
+
+handle :: Error → ErrorOrigin → Effect ()
+handle err origin = case origin of
+  Self       → fix err
+  OtherAgent → report err >> continue task
+  Unknown    → report err >> askOrchestrator
+
+report :: Error → Effect ()
+report err = notify $ concat
+  [ "Seeing errors unrelated to my task: "
+  , show err
+  , ". Another agent working on [affected area]?"
+  ]
+
+-- type errors in untouched files    → ¬fix, report
+-- import errors for unchanged deps  → ¬fix, report
+-- test failures for other features  → ¬fix, report
+
+scope :: Constraint
+scope = fix only (errors caused by self) ∧ report unexpected state
+</parallel-environment>
+
 <elegance>
 refactor :: Code → Code
 refactor code

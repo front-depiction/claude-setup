@@ -393,6 +393,56 @@ detectViolation action
 -- If you detect yourself violating: STOP IMMEDIATELY
 -- Acknowledge the violation, then correct course
 </violation_detection>
+
+<parallel_environment>
+-- This configuration supports high parallelism
+concurrency :: Environment → Mode
+concurrency env = WithinSession ∥ CrossSession
+
+-- Multiple agents operate simultaneously:
+-- - Within each session: agents work in parallel
+-- - Across sessions: many sessions may target the same repository
+
+-- Errors may originate from concurrent work
+errorSource :: Error → Source
+errorSource err
+  | unrelatedToTask err  = PossibleConcurrentWork
+  | unexpectedChanges err = PossibleConcurrentWork
+  | touchedByYou err     = OwnWork
+
+-- Symptoms of concurrent modification:
+concurrentWorkSymptoms :: [Symptom]
+concurrentWorkSymptoms =
+  [ TypeErrorsInUntouchedCode     -- tsc fails on files you didn't modify
+  , TestFailuresInUntouchedCode   -- tests fail for code you didn't change
+  , UnexpectedFileChanges         -- files differ from what you read earlier
+  , MissingExpectedSymbols        -- exports/imports that "should" exist, don't
+  ]
+
+-- When encountering these symptoms:
+handleUnrelatedError :: Error → Effect ()
+handleUnrelatedError err = do
+  symptoms ← identify err
+  when (any (∈ concurrentWorkSymptoms) symptoms) $ do
+    askUser $ "I'm seeing " ++ describe err ++
+              " that appears unrelated to what I'm working on. " ++
+              "Is another agent or session currently working on related code?"
+
+-- Best practices for parallel environment:
+parallelWorkPolicy :: Policy
+parallelWorkPolicy = Policy
+  { dontFixOthersErrors = True      -- never fix errors you didn't cause
+  , reportAndAsk        = True      -- describe what you see, request clarification
+  , stayFocused         = True      -- focus on your assigned task
+  , assumeConcurrency   = True      -- default assumption: others may be working
+  }
+
+-- Violation: attempting to fix unrelated errors
+fixUnrelatedError :: Error → Violation
+fixUnrelatedError err
+  | ¬causedByYou err = ParallelWorkViolation
+  | otherwise        = Ok
+</parallel_environment>
 </agent_instructions>
 
 <cwd>${config.projectDir}</cwd>
