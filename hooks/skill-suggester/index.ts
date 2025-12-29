@@ -17,10 +17,33 @@ import { Terminal, FileSystem, Path, Command, CommandExecutor } from "@effect/pl
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { UserPromptInput } from "../schemas"
 import * as Schema from "effect/Schema"
+import * as fs from "fs"
 
 interface SkillMetadata {
   readonly name: string
   readonly keywords: ReadonlyArray<string>
+}
+
+interface HookState {
+  readonly lastCallMs: number | null
+}
+
+const readHookState = (): HookState => {
+  try {
+    const content = fs.readFileSync(".claude/.hook-state.json", "utf-8")
+    const parsed = JSON.parse(content)
+    return { lastCallMs: typeof parsed.lastCallMs === "number" ? parsed.lastCallMs : null }
+  } catch {
+    return { lastCallMs: null }
+  }
+}
+
+const writeHookState = (state: HookState): void => {
+  try {
+    fs.writeFileSync(".claude/.hook-state.json", JSON.stringify(state, null, 2), "utf-8")
+  } catch (error) {
+    // Silently fail if we can't write state
+  }
 }
 
 const MiseTask = Schema.Struct({
@@ -96,7 +119,7 @@ const parseFrontmatter = (content: string): Record.ReadonlyRecord<string, string
 const extractKeywords = (text: string): ReadonlyArray<string> => {
   const commonWords = new Set([
     "the", "and", "for", "with", "using", "that", "this", "from",
-    "are", "can", "will", "use", "used", "make", "makes", "create"
+    "are", "can", "will", "use", "used", "make", "makes", "create", "run"
   ])
 
   const lowercased = String.toLowerCase(text)
@@ -208,6 +231,12 @@ const formatOutput = (context: string) =>
   )
 
 const program = Effect.gen(function* () {
+  // File-based state tracking for debouncing
+  const previousState = readHookState()
+  const currentCallMs = Date.now()
+
+  writeHookState({ lastCallMs: currentCallMs })
+
   const skills = yield* loadSkills
   const terminal = yield* Terminal.Terminal
 
@@ -227,6 +256,14 @@ const program = Effect.gen(function* () {
   // Build context parts
   const parts: string[] = []
 
+  // Add hook state tracking
+  const elapsedMs = previousState.lastCallMs ? currentCallMs - previousState.lastCallMs : 'n/a'
+  parts.push(`<hook_state>
+previous_call: ${previousState.lastCallMs ?? 'none'}
+current_call: ${currentCallMs}
+elapsed_ms: ${elapsedMs}
+</hook_state>`)
+
   // Always show matched skills if any
   if (Array.isNonEmptyReadonlyArray(matchingSkills)) {
     parts.push(`<skills>${matchingSkills.join(", ")}</skills>`)
@@ -245,124 +282,116 @@ ${miseTasksResult.value}
 </available-scripts>`)
   }
 
-  // Always: Remind about context efficiency
-  parts.push(`<context_efficiency>
-preserve :: Context → Effect ()
-preserve ctx = do
-  exploration ← spawn ExploreAgent query
-  await exploration                    -- subagent reads, you coordinate
-  -- ¬read files directly unless decision-critical
-</context_efficiency>`)
+  // Thoughtful pushback when there's genuine signal
+  parts.push(`<critical_thinking>
+-- Genuine pushback (when there's signal)
+pushBack :: Request → Maybe Concern
+pushBack req
+  | hasRisk req           = Just $ identifyRisk req
+  | overEngineered req    = Just $ proposeSimpler req
+  | unclear req           = Just $ askClarification req
+  | betterWayKnown req    = Just $ suggestAlternative req
+  | otherwise             = Nothing  -- proceed, don't manufacture objections
 
-  // Always: Remind about delegation
-  parts.push(`<delegation_strategy>
-delegate :: Task → Effect [Agent]
-delegate task
-  | atomic task     = pure <$> spawn task
-  | otherwise       = parallel $ fmap delegate (decompose task)
+-- Root cause analysis (for bugs/fixes)
+diagnose :: Problem → Effect Solution
+diagnose problem = do
+  symptoms ← observe problem
+  rootCause ← analyze symptoms   -- type errors often mask deeper issues
+  -- Don't jump to "layer issue" or "missing dependency"
+  -- Understand the actual problem first
 
--- invariant: |agents| ≥ 5 ∨ reconsider decomposition
--- self = coordinator, ¬implementer
-</delegation_strategy>`)
+  when (stuckInLoop attempts) $ do
+    log "Step back - multiple failed attempts suggest treating symptoms, not cause"
+    reassess problem
 
-  // Always: Delegation prompting guidance with gates
-  parts.push(`<delegation_prompts>
-prompt :: Agent → Task → Effect ()
-prompt agent task = do
-  -- Objective specification
-  specify (what task)              -- clear deliverable
-  specify (how task)               -- high-level approach
-  specify (scope task)             -- files/packages in scope
+-- Trust the type system (when not bypassed)
+redundantConcern :: Concern → Bool
+redundantConcern concern =
+  caughtByTypeSystem concern || caughtByLinter concern
 
-  -- Context references (agent reads, orchestrator never opens)
-  direct agent "/modules"          -- patterns to follow
-  direct agent ".context/"         -- reference implementations
-  direct agent (files task)        -- specific files to read
+-- The compiler is a better bug-finder than speculation
+-- Trust: tsc, eslint, Effect's typed errors
+-- Don't: predict runtime bugs that would fail at compile time
+-- Don't: suggest fixes for issues the types will catch anyway
 
-  -- Gates (agent must pass before reporting success)
-  establish (gate₁ task)           -- types pass: /typecheck dir
-  establish (gate₂ task)           -- tests pass: mise run test:pkg
+-- UNLESS type safety was bypassed:
+typeSystemBypassed :: Code → Bool
+typeSystemBypassed code = any code
+  [ "as any"
+  , "as unknown"
+  , "@ts-ignore"
+  , "@ts-expect-error"
+  , "// @ts-nocheck"
+  ]
+-- When escape hatches present → skepticism warranted
+-- Question the cast, not the type system
+</critical_thinking>`)
 
-  -- Lane structure
-  specify (steps task)             -- sequence of gated substeps
-  specify (gate step)              -- each step's success criterion
+  // Forbidden tools reminder
+  parts.push(`<FORBIDDEN_TOOLS>
+NEVER USE DIRECTLY:
+- Read   → spawn agent to read
+- Edit   → spawn agent to edit
+- Write  → spawn agent to write
+- Glob   → spawn agent to search
+- Grep   → spawn agent to search
 
--- orchestrator: ¬read files, ¬open context
--- orchestrator: reference paths, agent reads them
-</delegation_prompts>`)
+ALLOWED:
+- Task (spawn agents) ← YOUR PRIMARY TOOL
+- AskUserQuestion ← clarify with human
+- TodoWrite ← track delegated work
+- Bash ← ONLY for gates (typecheck/test)
+</FORBIDDEN_TOOLS>`)
 
-  // Always: Gates protocol
-  parts.push(`<gates_protocol>
-data Gate = TypesPass | TestsPass | Custom Condition
+  // Fix loop detection
+  parts.push(`<fix_loops>
+-- Fix loops indicate symptom-chasing, not root cause understanding
+inFixLoop :: [Attempt] → Bool
+inFixLoop attempts = length attempts > 2 ∧ ¬progressing attempts
 
-gate :: Gate → Effect ()
-gate TypesPass = do
-  result ← "/typecheck" (scope task)     -- incremental, not global
-  case result of
-    Pass   → proceed
-    Fail e → storeErrors e >> fix >> gate TypesPass
+-- When in fix loop: step back, reassess, don't try harder
+</fix_loops>`)
 
-gate TestsPass = do
-  result ← "mise run test:" <> (package task)
-  case result of
-    Pass   → proceed
-    Fail e → fix >> gate TestsPass
+  // Delegation enforcement
+  parts.push(`<DELEGATION_RULES>
+handle :: Task → Effect ()
+handle task = spawn agent task  -- ALWAYS. NO EXCEPTIONS.
 
-storeErrors :: Errors → Effect ()
-storeErrors errors = do
-  tree ← buildErrorTree errors           -- group by file, count
-  write ".claude/pre-types.json" tree    -- persist for visibility
+-- "It's just one small edit" → NO. Delegate.
+-- "I'll quickly check this" → NO. Delegate.
+-- "This is trivial" → NO. Delegate.
 
--- success := TypesPass ∧ TestsPass
--- report success only when both gates pass
--- never skip gates, never report partial success
-</gates_protocol>`)
+minimum_agents :: NonTrivialTask → Int
+minimum_agents _ = 3  -- If fewer, decompose more
+</DELEGATION_RULES>`)
 
-  // Always: Lane subdivision
-  parts.push(`<lane_structure>
-data Lane = Lane
-  { name  :: String
-  , steps :: [Step]
-  }
+  // Gates (the ONE thing you run directly)
+  parts.push(`<GATES>
+-- Gates are the ONLY direct execution allowed
+-- Run via Bash after agents complete work
 
-data Step = Step
-  { action :: Task
-  , gate   :: Gate
-  }
+typecheck :: Scope → Effect Result
+typecheck scope = Bash "mise run typecheck:pkg"
 
-execute :: Lane → Effect ()
-execute lane = traverse_ executeStep (steps lane)
-  where
-    executeStep step = do
-      result ← action step
-      verify (gate step)               -- must pass before next step
-      pure result
+test :: Package → Effect Result
+test pkg = Bash "mise run test:pkg"
 
--- lanes: parallel units of work (independent)
--- steps: sequential within a lane (dependent)
--- each step gated before proceeding
--- no maximum steps, but each must be logical unit
-</lane_structure>`)
+-- Report success ONLY when both pass
+</GATES>`)
 
-  // Always: Remind about concurrency
-  parts.push(`<parallel_execution>
-execute :: [Tool] → Effect [Result]
-execute tools = case partition independent tools of
-  (parallel, sequential) → do
-    p ← parallel $ fmap call parallel   -- single message
-    s ← traverse call sequential
-    pure $ p <> s
-</parallel_execution>`)
+  parts.push(`<TODO_ENFORCEMENT>
+-- Todos are MANDATORY infrastructure, not optional
 
-  // Always: Remind about module commands
-  parts.push(`<context_discovery>
-discover :: Effect Context
-discover = do
-  modules ← "/modules"              -- list ai-context modules
-  content ← "/module" path          -- read specific module
-  matches ← "/module-search" pat    -- search by pattern
-  pure $ Context modules content matches
-</context_discovery>`)
+createTodos :: Task → [Todo] ++ gateTodos
+gateTodos = ["Run typecheck gate", "Run test gate"]
+
+-- Every non-trivial task MUST have:
+-- 1. Decomposed subtask todos
+-- 2. Gate todos (typecheck + test)
+
+-- No todos = No visibility = Violation
+</TODO_ENFORCEMENT>`)
 
   // Always: Show version
   const commandExecutor = yield* CommandExecutor.CommandExecutor
