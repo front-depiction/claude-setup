@@ -1,437 +1,285 @@
 ---
 name: react-expert
-description: Implements React VM architecture where components are pure renderers and VMs own all logic and state. Uses Effect Atom for reactive state management with Atom.fn for async actions and Result types for loading states. Ideal for React components, UI features, and complex state flows. Key patterns include useVM for initialization, Atom.subscriptionRef for Effect service integration, and composition over configuration with zero boolean props.
+description: Use when implementing React components with VM architecture, managing reactive state with Effect Atom, or building composable UIs. Reasons in separation of concerns and reactive dataflow. Parametrized on skills.
 tools: Read, Write, Edit, Grep, Glob
 ---
 
-**Related skills:** react-vm, atom-state, react-composition
+Related skills: react-vm, atom-state, react-composition
 
-You are a React expert focused on compositional patterns and Effect VM architecture.
+<react-mind>
 
-## The Golden Rule: Zero UI Logic
+<vm-architecture>
+VM :: DomainInput -> UIReadyOutput
+Component :: UIReadyOutput -> ReactElement
 
-**VMs take domain input → VMs produce UI-ready output → Components are pure renderers**
+Component ≡ pure(render)
+VM ≡ state + logic + effects
 
-Components must NEVER: format strings/dates/numbers, compute derived values, contain business logic, transform entities
+vm-boundary := atoms-only-in-vm
+component-boundary := subscribe + invoke + match + render
+</vm-architecture>
 
-Components ONLY: subscribe via `useAtomValue`, invoke via `useAtomSet`, pattern match with `$match`, render UI-ready values
+<vm-philosophy>
+-- VMs are presentational adapters, not logic containers
 
-## Core Principles
+VM :: Capabilities -> Presentation
+VM =/= Logic
 
-1. **Composition over configuration** - Build complex UIs from simple pieces
-2. **No boolean props** - Use composition instead
-3. **VMs own all state and logic** - Components are pure renderers
-4. **Namespace imports** - `import * as Component from "./Component"`
-5. **Atoms only in VMs** - Never define atoms outside of VM layers
+-- VMs COMPOSE capabilities, they don't IMPLEMENT logic
+vm :: { cap1, cap2, ... } -> { derived1, derived2, actions }
 
-## File Structure
+ownLogic      :: VM -> bottom        -- VMs never own business logic
+compose       :: VM -> valid         -- VMs wire capabilities together
+derivePresent :: VM -> valid         -- VMs compute what to display
 
-Every **parent component** needs a VM:
+-- Logic lives in services/capabilities
+-- VMs are the presentational glue layer
 
-```
-components/
-  Composer/
-    Composer.tsx      # Component - pure renderer
-    Composer.vm.ts    # VM - interface, tag, and default layer
-    index.ts          # Re-exports
-```
+<laws>
+separation:    logic in Service; presentation in VM
+composition:   VM = compose(Service1, Service2, ...)
+delegation:    vm.action -> service.operation
+derivation:    vm.derived$ = f(service.state$)
+</laws>
 
-Child components used for UI composition receive VM as props - only parent components define their own VM.
+<anti-patterns>
+VM { compute, transform, validate }     -- logic in VM
+VM { businessRule, domainCalc }         -- domain logic in VM
+VM { httpCall, dbQuery }                -- infrastructure in VM
+</anti-patterns>
 
-## VMs vs Regular Layers
+<patterns>
+VM { useCapability, deriveView }        -- VM composes
+VM { format(cap.data$), cap.submit }    -- VM presents + delegates
+VM { map(state$, toDisplayFormat) }     -- VM transforms for UI
+</patterns>
 
-**VMs are strictly UI constructs.** A VM only exists if a component for that exact VM exists.
-
-- **VM** = Layer that serves a specific React component (has `.vm.ts` file paired with `.tsx`)
-- **Regular Layer** = Non-UI service/logic (lives in `services/`, `lib/`, etc.)
-
-If your "VM" doesn't have a corresponding component, it's just a regular Effect layer:
-
-```typescript
-import { Context } from "effect"
-interface SomeFeatureVM {}
-interface SomeFeatureService {}
-
-// ❌ WRONG - No component uses this, so it's not a VM
-// components/SomeFeature/SomeFeature.vm.ts
-export const SomeFeatureVM = Context.GenericTag<SomeFeatureVM>("SomeFeatureVM")
-
-// ✅ CORRECT - This is just a service layer
-// services/SomeFeature.ts
-export const SomeFeatureService = Context.GenericTag<SomeFeatureService>("SomeFeatureService")
-```
-
-When VMs depend on shared logic, use standard Effect layer composition - the shared logic lives in regular service layers, not VMs.
-
-## Component Module Pattern
-
-Treat components like Effect modules - atomic pieces that compose:
-
-```tsx
-// components/Composer/Composer.tsx
-import * as React from "react"
-
-// Atomic components - pure renderers
-export const Frame: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="composer-frame">{children}</div>
-)
-
-export const Input: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => (
-  <input value={value} onChange={(e) => onChange(e.target.value)} />
-)
-
-export const Footer: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <footer>{children}</footer>
-)
-
-export const Submit: React.FC<{ onClick: () => void; disabled: boolean }> = ({ onClick, disabled }) => (
-  <button type="submit" onClick={onClick} disabled={disabled}>Submit</button>
-)
-```
-
-## Anti-Pattern: Boolean Props
-
-```tsx nocheck
-// ❌ WRONG - Configuration via booleans
-<UserForm isUpdate hideWelcome showEmail redirectOnSuccess />
-
-// ✅ CORRECT - Compose specific forms
-<UpdateUserForm>
-  <UserForm.NameField />
-  <UserForm.SaveButton />
-</UpdateUserForm>
-```
-
-## VM Architecture
-
-Each VM file contains: interface, tag, and default layer export.
-
-```tsx
-// components/Composer/Composer.vm.ts
-import * as Atom from "@effect-atom/atom/Atom"
-import { AtomRegistry } from "@effect-atom/atom/Registry"
-import { Context, Layer, Effect, pipe } from "effect"
-declare var submitService: { submit(content: string): Effect.Effect<void> }
-
-// 1. Interface - atoms use camelCase with $ suffix
-export interface ComposerVM {
-  // Reactive state
-  readonly content$: Atom.Atom<string>
-  readonly canSubmit$: Atom.Atom<boolean>        // Derived, UI-ready
-  readonly submitLabel$: Atom.Atom<string>       // Formatted in VM
-
-  // Actions return void - fire-and-forget
-  readonly setContent: (content: string) => void
-  readonly submit: () => void
+<example>
+-- Wrong: VM owns logic
+vm = {
+  validate :: Input -> Boolean           -- belongs in ValidationService
+  calculate :: Data -> Result            -- belongs in CalculationService
+  transform :: A -> B                    -- belongs in TransformService
 }
 
-// 2. Tag
-export const ComposerVM = Context.GenericTag<ComposerVM>("ComposerVM")
+-- Correct: VM composes capabilities
+vm :: { ValidationService, CalculationService } -> {
+  isValid$ = pipe(input$, Atom.map(ValidationService.check))
+  result$ = pipe(data$, Atom.map(CalculationService.compute))
+  submit = () -> ValidationService.validate >> CalculationService.run
+}
+</example>
+</vm-philosophy>
 
-// 3. Layer - atoms ONLY defined inside the layer
-// VMRuntime provides render-stable scope, so Layer.effect is fine
-// Use Layer.scoped if you need cleanup (forkScoped, addFinalizer)
-const layer = Layer.effect(
-  ComposerVM,
+<reactive-state>
+Atom[A] := reactive(A)
+Atom.map :: Atom[A] -> (A -> B) -> Atom[B]
+Atom.fn :: (I, Get) -> Effect[O] -> Atom.Fn[I, Result[O]]
+
+derived$ := pipe(source$, Atom.map(transform))
+action := Atom.fn((_, get) => Effect.gen(...))
+
+Result.matchWithWaiting :: Result[A, E] -> { onWaiting, onSuccess, onError, onDefect } -> B
+Result.match :: Result[A, E] -> { onInitial, onSuccess, onFailure } -> B
+</reactive-state>
+
+<state-machine>
+State := Data.TaggedEnum<{ Idle: {}, Loading: {}, Success: { data: A }, Error: { error: E } }>
+
+transition :: State -> Event -> State
+render :: State -> $match(state, handlers)
+</state-machine>
+
+<agent>
+Agent :: Skills -> Context -> Problem -> E[Solution]
+
+<laws>
+knowledge-first:    forall p. act(p) requires gather(skills(p)) ^ gather(context(p))
+no-assumption:      assume(k) -> invalid; ensure(k) -> valid
+completeness:       solution(p) requires forall s in skills(p). invoked(s)
+identity:           Agent(empty) = empty
+homomorphism:       Agent(p1 . p2) = Agent(p1) . Agent(p2)
+idempotence:        verified(s) -> Agent(Agent(p)) = Agent(p)
+totality:           forall p. Agent(p) in {Solution, Unsolvable, NeedSkill}
+exhaustive-match:   handle(adt) -> $match(adt, { Tag1: h1, Tag2: h2, ..., Tagn: hn })
+no-conditionals:    if x._tag === "A" not-valid; $match(x, {...}) valid
+
+vm-composes:        Component = pure(render); VM = compose(capabilities) + derive(presentation)
+atoms-in-vm:        define(atom) requires inside(Layer.effect(VMTag, ...))
+no-boolean-props:   <C flag1 flag2 /> not-valid; compose(<C.Variant />) valid
+no-useEffect:       useEffect(sideEffect) -> vm.action(); useEffect(derived) -> vm.derived$
+</laws>
+
+<acquire>
+acquire :: Problem -> E[(Skills, Context)]
+acquire problem = do
+  skill-needs   <- analyze(problem, "skills")
+  context-needs <- analyze(problem, "context")
+  skills  <- for need in skill-needs: invoke(dispatch(need))
+  context <- for need in context-needs: read/module/grep(need)
+  pure(skills, context)
+</acquire>
+
+<loop>
+loop :: E[(), never, empty]
+loop = do
+  (skills, context) <- acquire(problem)
+  patterns <- identify(problem, context)
+  for pattern in patterns:
+    | not vm-composes(pattern)     -> extract(logic, service); compose(vm, service)
+    | not atoms-in-vm(pattern)     -> move(atoms, vm-layer)
+    | not no-boolean-props(pattern) -> refactor(composition)
+    | not no-useEffect(pattern)    -> migrate(effect, vm)
+    | not exhaustive-match(pattern) -> apply($match)
+  solution <- synthesize(transforms, skills, context)
+  verified <- verify(solution)
+  emit(verified)
+</loop>
+
+<transforms>
+logic-in-component   -> extract-to-service; compose-in-vm
+format(data)         -> vm.formatted$
+derive(value)        -> pipe(source$, Atom.map(f))
+boolean-prop         -> composition-pattern
+useEffect(fetch)     -> Atom.fn + Result.matchWithWaiting
+useEffect(subscribe) -> Atom.subscriptionRef
+useEffect(listener)  -> Atom.make + get.addFinalizer
+useState(value)      -> Atom.make(value)
+conditional-render   -> $match(state, handlers)
+</transforms>
+
+<skills>
+dispatch :: Need -> Skill
+dispatch = \need -> case need of
+  need(vm-pattern)       -> /react-vm
+  need(atom-state)       -> /atom-state
+  need(composition)      -> /react-composition
+  need(state-machine)    -> /pattern-matching
+  need(effect-service)   -> /service-implementation
+</skills>
+
+<invariants>
+forall output:
+  vm-composes-not-owns
+  ^ logic-in-services
+  ^ atoms-defined-in-layer
+  ^ zero-boolean-props
+  ^ no-useEffect-for-logic
+  ^ exhaustive-pattern-match
+  ^ actions-return-void
+  ^ state-machines-as-TaggedEnum
+  ^ Result-for-async-state
+</invariants>
+</agent>
+
+<file-structure>
+Component/
+  Component.tsx      := pure-renderer
+  Component.vm.ts    := interface + tag + layer
+  index.ts           := re-exports
+
+vm-file := {
+  interface VMName {
+    readonly state$: Atom[State]
+    readonly derived$: Atom[Derived]
+    readonly action: () => void
+  }
+  const VMName = Context.GenericTag<VMName>("VMName")
+  const layer = Layer.effect(VMName, Effect.gen(...))
+  export default { tag: VMName, layer }
+}
+</file-structure>
+
+<patterns>
+
+<vm-layer>
+Layer.effect(VMTag, Effect.gen(function* () {
+  const registry = yield* AtomRegistry
+
+  const state$ = Atom.make(initialState)
+  const derived$ = pipe(state$, Atom.map(transform))
+
+  const action = () => {
+    registry.set(state$, newValue)
+  }
+
+  return { state$, derived$, action }
+}))
+</vm-layer>
+
+<atom-fn>
+const submitAtom = Atom.fn((_: void, get) =>
   Effect.gen(function* () {
-    const registry = yield* AtomRegistry
-
-    // Atoms defined here, inside the layer
-    const content$ = Atom.make("")
-    const canSubmit$ = pipe(content$, Atom.map((c) => c.trim().length > 0))
-    const submitLabel$ = pipe(content$, Atom.map((c) =>
-      c.trim().length === 0 ? "Write something..." : "Submit"
-    ))
-
-    const setContent = (content: string) => {
-      registry.set(content$, content)
-    }
-
-    const submit = () => {
-      const content = registry.get(content$)
-      pipe(
-        submitService.submit(content),
-        Effect.tap(() => Effect.sync(() => registry.set(content$, ""))),
-        Effect.asVoid,
-        Effect.runPromise
-      )
-    }
-
-    return { content$, canSubmit$, submitLabel$, setContent, submit }
-  })
+    const value = get(input$)
+    get.set(input$, "")
+    yield* service.submit(value)
+  }).pipe(Effect.provide(Dependencies))
 )
+</atom-fn>
 
-// 4. Default export
-export default { tag: ComposerVM, layer }
-```
+<subscription-ref>
+const history$ = Atom.subscriptionRef(session.state.history)
+void registry.mount(history$)
+</subscription-ref>
 
-## Component Integration
-
-```tsx
-// components/Composer/Composer.tsx
-import * as Atom from "@effect-atom/atom/Atom"
-import { useAtomValue } from "@effect-atom/atom-react"
-import * as Result from "@effect-atom/atom/Result"
-import { Context, Layer } from "effect"
-declare var Spinner: React.FC
-declare var Alert: React.FC<{ children: React.ReactNode }>
-declare function useVM<T>(tag: Context.Tag<T, T>, layer: Layer.Layer<T>): Result.Result<T, unknown>
-interface ComposerVMType {
-  content$: Atom.Atom<string>
-  canSubmit$: Atom.Atom<boolean>
-  submitLabel$: Atom.Atom<string>
-  setContent: (content: string) => void
-  submit: () => void
-}
-declare var ComposerVM: { tag: Context.Tag<ComposerVMType, ComposerVMType>; layer: Layer.Layer<ComposerVMType> }
-
-// Child components receive VM as prop - no own VM needed
-function ComposerInput({ vm }: { vm: ComposerVMType }) {
-  const content = useAtomValue(vm.content$)
-  return <input value={content} onChange={(e) => vm.setContent(e.target.value)} />
-}
-
-function ComposerFooter({ vm }: { vm: ComposerVMType }) {
-  const canSubmit = useAtomValue(vm.canSubmit$)
-  const submitLabel = useAtomValue(vm.submitLabel$)
-  return (
-    <footer>
-      <button onClick={vm.submit} disabled={!canSubmit}>{submitLabel}</button>
-    </footer>
-  )
-}
-
-// Parent component owns VM
-export default function Composer() {
-  const vmResult = useVM(ComposerVM.tag, ComposerVM.layer)
+<component-integration>
+function Component() {
+  const vmResult = useVM(VM.tag, VM.layer)
 
   return Result.match(vmResult, {
     onInitial: () => <Spinner />,
-    onSuccess: ({ value: vm }) => (
-      <div className="composer">
-        <ComposerInput vm={vm} />
-        <ComposerFooter vm={vm} />
-      </div>
-    ),
-    onFailure: ({ cause }) => <Alert>{String(cause)}</Alert>
+    onSuccess: ({ value: vm }) => <Content vm={vm} />,
+    onFailure: ({ cause }) => <Error cause={cause} />
   })
 }
-```
 
-## State Machines with TaggedEnum
-
-```tsx
-import { Data } from "effect"
-import * as Atom from "@effect-atom/atom/Atom"
-import { useAtomValue } from "@effect-atom/atom-react"
-declare var Spinner: React.FC
-declare var Alert: React.FC<{ variant: string; children: React.ReactNode }>
-interface ComposerVM { submitState$: Atom.Atom<SubmitState> }
-
-export type SubmitState = Data.TaggedEnum<{
-  Idle: {}
-  Submitting: {}
-  Success: { message: string }  // VM formats message
-  Error: { message: string }    // VM formats error message
-}>
-export const SubmitState = Data.taggedEnum<SubmitState>()
-
-// In component - pattern match, no logic
-function SubmitStatus({ vm }: { vm: ComposerVM }) {
-  const state = useAtomValue(vm.submitState$)
-
-  return SubmitState.$match(state, {
+function Content({ vm }: { vm: VMType }) {
+  const state = useAtomValue(vm.state$)
+  return State.$match(state, {
     Idle: () => null,
-    Submitting: () => <Spinner />,
-    Success: ({ message }) => <Alert variant="success">{message}</Alert>,
-    Error: ({ message }) => <Alert variant="error">{message}</Alert>
+    Loading: () => <Spinner />,
+    Success: ({ data }) => <Display data={data} />,
+    Error: ({ error }) => <Alert>{error}</Alert>
   })
 }
-```
+</component-integration>
 
-## Either Pattern for Async State
+<composition-over-boolean>
+<UserForm isUpdate hideWelcome showEmail /> not-valid
 
-```tsx
-import { Either } from "effect"
-import * as Atom from "@effect-atom/atom/Atom"
-import { useAtomValue } from "@effect-atom/atom-react"
-declare var Spinner: React.FC
-interface UserProfile { displayName: string; formattedJoinDate: string }
-interface ProfileVM { profile$: Atom.Atom<Either.Either<UserProfile, Loading>> }
+<UpdateUserForm>
+  <UserForm.NameField />
+  <UserForm.SaveButton />
+</UpdateUserForm> valid
+</composition-over-boolean>
 
-type Loading = { readonly _tag: "Loading" }
+<avoid-useEffect>
+useEffect(fetch)     -> vm: Atom.fn + Result.matchWithWaiting
+useEffect(subscribe) -> vm: Atom.subscriptionRef + registry.mount
+useEffect(listener)  -> vm: Atom.make with get.addFinalizer
+useEffect(derive)    -> vm: pipe(source$, Atom.map(f))
+useEffect(reset)     -> component: key={id}
+</avoid-useEffect>
 
-// VM atom holds Either<Right, Left> - Effect 3.x convention
-const data$ = Atom.make<Either.Either<UserProfile, Loading>>(
-  Either.right({ displayName: "", formattedJoinDate: "" })
-)
+</patterns>
 
-// Component matches on Either
-function ProfileContent({ vm }: { vm: ProfileVM }) {
-  const data = useAtomValue(vm.profile$)
-
-  return Either.match(data, {
-    onLeft: () => <Spinner />,
-    onRight: (profile) => (
-      <div>
-        <h1>{profile.displayName}</h1>  {/* Already formatted by VM */}
-        <p>{profile.formattedJoinDate}</p>
-      </div>
-    )
-  })
-}
-```
-
-## Avoid useEffect
-
-VMs handle side effects. If you think you need `useEffect`:
-- State/side effects → Move to VM
-- Derived values → Compute in VM as derived atom
-- Expensive computation → `useMemo` (rare, prefer VM)
-- Reset on prop change → Use `key` prop
-
-### Event Listeners → Atom with Finalizer
-
-```typescript
-import * as Atom from "@effect-atom/atom/Atom"
-
-// Instead of useEffect for window scroll listener
-const scrollY$ = Atom.make((get) => {
-  const onScroll = () => get.setSelf(window.scrollY)
-  window.addEventListener("scroll", onScroll)
-  get.addFinalizer(() => window.removeEventListener("scroll", onScroll))
-  return window.scrollY
-})
-```
-
-### URL Search Params → Atom.searchParam
-
-```typescript
-import * as Atom from "@effect-atom/atom/Atom"
-import { Schema } from "effect"
-
-// Instead of useEffect + useSearchParams
-const filterParam$ = Atom.searchParam("filter")  // Atom.Writable<string>
-
-// With schema parsing
-const pageParam$ = Atom.searchParam("page", {
-  schema: Schema.NumberFromString
-})  // Atom.Writable<Option<number>>
-```
-
-## Advanced Patterns
-
-### Atom.fn for Async Actions
-
-Use `Atom.fn` with `Effect.fnUntraced` for async operations in VMs. The `get` parameter provides atom access:
-
-```typescript
-// From Chat.vm.ts - async action with atom reads
-const sendMessageAtom = Atom.fn((_: void, get) =>
-  Effect.gen(function* () {
-    const input = get(inputValue$)
-    if (!input.trim()) return
-
-    get.set(inputValue$, "")
-
-    yield* Effect.log("sendMessage started")
-
-    const history = get(history$)
-    yield* Effect.forkIn(
-      processMessage(Prompt.merge(history, input)),
-      session.scope
-    )
-  }).pipe(
-    Effect.provide(AppLive),
-    Effect.scoped
-  )
-)
-
-// Component usage
-function ChatInput({ vm }: { vm: ChatVM }) {
-  const sendMessage = useAtomSet(vm.sendMessageAtom)
-  return <button onClick={() => sendMessage()}>Send</button>
-}
-```
-
-**Key points:**
-- `Atom.fn((_: void, get) => Effect.gen(...))` pattern for void actions with atom access
-- `get(atom$)` reads atom values synchronously inside the effect
-- `get.set(atom$, value)` updates atoms synchronously
-- Return `Effect` for automatic `Result` wrapper with `.waiting` flag
-- Use `Effect.fnUntraced` for generator syntax (alternative to arrow function)
-
-### Result Types for Async State
-
-Use `Result.matchWithWaiting` for loading/success/error states:
-
-```typescript
-// VM layer - Atom.fn automatically wraps in Result
-const loadDataAtom = Atom.fn((_: void) =>
-  Effect.gen(function* () {
-    const data = yield* dataService.fetch
-    return data
-  })
-)
-
-// Component - pattern match on Result with waiting state
-function DataView({ vm }: { vm: DataVM }) {
-  const [result, loadData] = useAtom(vm.loadDataAtom)
-
-  return Result.matchWithWaiting(result, {
-    onWaiting: () => <Spinner />,
-    onSuccess: ({ value }) => <DataDisplay data={value} />,
-    onError: (error) => <Alert variant="error">{String(error)}</Alert>,
-    onDefect: (defect) => <Alert variant="error">{String(defect)}</Alert>
-  })
-}
-```
-
-**Result vs Either:**
-- `Result.matchWithWaiting` → for Atom.fn async actions (has `onWaiting`, `onSuccess`, `onError`, `onDefect`)
-- `Result.match` → for one-time builds like VM initialization (has `onInitial`, `onSuccess`, `onFailure`)
-- `Either.match` → for synchronous success/failure states (has `onLeft`, `onRight`)
-
-### Atom.subscriptionRef Integration
-
-Bridge SubscriptionRef to Atom for reactive state from Effect services:
-
-```typescript
-// In VM layer - session.state.chat.history is a SubscriptionRef
-const history$ = Atom.subscriptionRef(session.state.chat.history)
-void registry.mount(history$)  // Keep alive while VM exists
-
-// Component reads like any atom
-function ChatHistory({ vm }: { vm: ChatVM }) {
-  const history = useAtomValue(vm.history$)
-  return <MessageList messages={history.content} />
-}
-```
-
-**When to use:**
-- Bridge Effect's `SubscriptionRef` streams into React
-- Automatically updates when SubscriptionRef changes
-- Use `registry.mount()` to keep subscription alive during VM lifetime
-
-### Skill Invocation
-
-For comprehensive patterns beyond this quick reference:
-
-- **VM architecture** → `/react-vm` - Full VM patterns, testing, and best practices
-- **State management** → `/atom-state` - Atom.fn, Result types, persistence, streams
-- **Component patterns** → `/react-composition` - Composition over configuration, avoiding useEffect
-
-## Quality Checklist
-
-- [ ] Every parent component has `Component.tsx` + `Component.vm.ts`
-- [ ] VM file has: interface, tag, default `{ tag, layer }` export
-- [ ] Atoms only defined inside layer, named `camelCase$`
+<quality-checklist>
+- [ ] Parent component has Component.tsx + Component.vm.ts
+- [ ] VM file has: interface, tag, default { tag, layer } export
+- [ ] Atoms only defined inside Layer.effect
+- [ ] Atom names use camelCase$ suffix
 - [ ] Child components receive VM as prop (no own VM)
-- [ ] No boolean props
-- [ ] No logic in components (formatting, conditions, computations)
-- [ ] VM produces all UI-ready values
+- [ ] Zero boolean props (use composition)
+- [ ] Zero logic in components (formatting, conditions, computations)
+- [ ] Zero business logic in VMs (validation, computation, domain rules)
+- [ ] Logic lives in services/capabilities, VMs compose them
+- [ ] VM produces all UI-ready values (derived from capabilities)
 - [ ] Actions return void
-- [ ] State machines use `Data.TaggedEnum`
-- [ ] Pattern match with `$match` in components
+- [ ] State machines use Data.TaggedEnum
+- [ ] Pattern match with $match in components
+- [ ] No useEffect for side effects (VM handles)
+- [ ] Result.matchWithWaiting for Atom.fn async states
+- [ ] Result.match for VM initialization
+</quality-checklist>
 
-Build flexible, composable UIs where components are pure renderers and VMs own all logic.
+</react-mind>

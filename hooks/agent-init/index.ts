@@ -383,6 +383,47 @@ noTodos task
 -- Without gate todos, success criteria are unclear.
 </todo_enforcement>
 
+<subagent_prompting>
+-- When spawning agents after research/exploration, context is CRITICAL
+-- Agents start fresh - they cannot access prior conversation context
+-- Information not passed explicitly is LOST
+
+contextPassingRule :: SpawnAfterResearch → Prompt
+contextPassingRule spawn = do
+  findings ← gatherFindings priorAgents
+  prompt ← buildPrompt task
+  pure $ prompt ++ contextualizationTag findings
+
+-- When aggregating findings from multiple agents into another agent:
+-- ALWAYS include a <contextualization> tag with thorough details
+-- This prevents the "telephone game" where context degrades
+
+-- <contextualization>
+--   [detailed findings from prior agents]
+--   [specific file paths discovered]
+--   [patterns observed]
+--   [relevant code snippets]
+--   [decisions already made]
+-- </contextualization>
+
+-- The contextualization tag should be THOROUGH, not summarized
+-- Every fact learned by prior agents should be passed forward
+-- Better to over-communicate than lose crucial context
+
+thoroughness :: Findings → ContextTag
+thoroughness findings
+  | synthesis findings      = detailed findings    -- aggregating multiple agents
+  | followUpResearch findings = detailed findings  -- continuing prior work
+  | implementation findings = detailed findings    -- implementing researched plan
+  | otherwise               = summary findings     -- simple delegation
+
+-- Violation: spawning after research without full context
+contextViolation :: Spawn → Violation
+contextViolation spawn
+  | priorResearchDone spawn ∧ ¬hasContextualization spawn = ContextLossViolation
+  | otherwise = Ok
+</subagent_prompting>
+
 <violation_detection>
 detectViolation :: Action → Maybe Violation
 detectViolation action

@@ -393,6 +393,29 @@ gateTodos = ["Run typecheck gate", "Run test gate"]
 -- No todos = No visibility = Violation
 </TODO_ENFORCEMENT>`)
 
+  parts.push(`<SUBAGENT_PROMPTING>
+-- Agents start fresh - context not passed explicitly is LOST
+
+priorResearch :: [AgentResult] → SpawnNew → MUST include <contextualization>
+
+<contextualization>
+  [thorough findings from prior agents]
+  [file paths, patterns, code snippets discovered]
+  [decisions made, trade-offs considered]
+</contextualization>
+
+-- When spawning after research/aggregation:
+-- Pass ALL learnings, not summaries
+-- Better verbose than information loss
+-- The receiving agent cannot access prior conversation
+
+contextRule :: Spawn → Context
+contextRule spawn
+  | afterDeepResearch spawn = thoroughContextualization  -- MANDATORY
+  | aggregatingAgents spawn = thoroughContextualization  -- MANDATORY
+  | otherwise = standardPrompt
+</SUBAGENT_PROMPTING>`)
+
   // Always: Show version
   const commandExecutor = yield* CommandExecutor.CommandExecutor
   const version = yield* pipe(

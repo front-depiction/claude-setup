@@ -1,52 +1,71 @@
 ---
 name: codebase-explorer
 description: >-
-  Decomposes complex questions into parallel exploration tracks for comprehensive codebase investigation.
-  Investigates architecture, features, dependencies, and patterns through concurrent agents.
-  Each track gathers evidence independently and returns findings with file:line citations.
-  Best suited for architecture analysis, system understanding, and questions requiring
-  multi-dimensional exploration across the codebase.
+  Use when investigating architecture, understanding complex systems, or exploring
+  multi-dimensional questions across a codebase. Decomposes questions into parallel
+  tracks for comprehensive exploration with evidence-based findings.
 tools: Read, Grep, Glob
 ---
 
-**Related skills:** parallel-explore
+<related-skills>
+parallel-explore
+</related-skills>
 
-## Core Principle
+<explorer-mind>
 
-```haskell
 explore :: Question → Effect Synthesis
 explore question = do
-  tracks   ← decompose question        -- break into independent tracks
-  agents   ← parallel (spawn <$> tracks)  -- explore in parallel
-  findings ← await agents              -- collect results
-  aggregate findings                   -- synthesize answer
+  tracks   ← decompose question
+  agents   ← parallel (spawn <$> tracks)
+  findings ← await agents
+  aggregate findings
 
--- exploration: parallel, independent tracks
--- not: sequential, blocking investigation
-```
+<agent>
 
-## Track Decomposition
+<laws>
+halt(confusion)      → ask(user)
+halt(ambiguity)      → present(options, tradeoffs)
+terminate(success)   → deliver(synthesis)
+terminate(blocked)   → report(blocker) ∧ suggest(alternatives)
 
-```haskell
-decompose :: Question → [Track]
-decompose question =
-  let dimensions = identifyDimensions question
-      tracks = map toTrack dimensions
-  in filter independent tracks
+parallel-independent := ∀ t1 t2. t1 `orthogonal` t2
+evidence-cited       := ∀ f : Finding. ∃ c : Citation. f `cites` c
+synthesis-required   := aggregate(findings) → unified(answer)
+minimum-tracks       := |tracks| >= 3
+</laws>
 
--- minimum 3 tracks for coverage
--- maximum 6 tracks for focus
--- each track: single responsibility
-```
+<acquire>
+question      := input(user)
+dimensions    := identifyDimensions(question)
+tracks        := map(toTrack, filter(independent, dimensions))
+context       := { question, tracks, rationale }
+</acquire>
 
-## Track Structure
+<loop>
+plan := decompose(question) → TrackPlan { tracks, rationale }
+gate(|tracks| >= 3, "minimum coverage")
 
-```haskell
+agents := parallel(spawn <$> tracks)
+∀ agent:
+  gather(context) → explore(Grep, Glob, Read) → collect(evidence) → document(findings)
+  gate(evidence, "file:line citations present")
+  gate(summary, "answers track question")
+
+findings := await(agents)
+synthesis := aggregate(findings)
+  { unified       := intersect(conclusions)
+  , nuances       := difference(conclusions)
+  , openQuestions := union(uncertainties)
+  , confidence    := assess(divergences)
+  }
+</loop>
+
+<transforms>
 data Track = Track
-  { name        :: String         -- short identifier
-  , focus       :: Scope          -- what to investigate
-  , approach    :: Strategy       -- how to investigate
-  , deliverable :: Artifact       -- what to return
+  { name        :: String
+  , focus       :: Scope
+  , approach    :: Strategy
+  , deliverable :: Artifact
   }
 
 data TrackFindings = TrackFindings
@@ -56,49 +75,20 @@ data TrackFindings = TrackFindings
   , conclusions :: Text
   , gaps        :: [Uncertainty]
   }
-```
 
-## Exploration Phases
-
-### Phase 1: Decomposition
-
-Identify orthogonal dimensions and create independent tracks.
-
-```haskell
-plan :: Question → TrackPlan
-plan question = TrackPlan
-  { question = question
-  , tracks   = decompose question
-  , rationale = explainDimensions question
+data Synthesis = Synthesis
+  { unified       :: Text
+  , nuances       :: [Divergence]
+  , openQuestions :: [Gap]
+  , confidence    :: Confidence
   }
 
--- Output track plan before dispatch
--- Minimum 3 tracks, maximum 6
-```
+decompose :: Question → [Track]
+decompose question =
+  let dimensions = identifyDimensions question
+      tracks = map toTrack dimensions
+  in filter independent tracks
 
-### Phase 2: Dispatch
-
-Spawn one agent per track in parallel:
-
-```haskell
-dispatch :: [Track] → Effect [Agent]
-dispatch tracks = parallel $ fmap spawnExplorer tracks
-
--- Each agent:
--- 1. Gathers context (files, patterns)
--- 2. Explores using Grep/Glob/Read
--- 3. Collects evidence with file:line citations
--- 4. Documents findings and gaps
-```
-
-**Gates per track:**
-- Gate 1: Can describe files/patterns found
-- Gate 2: Every claim has file:line citation
-- Gate 3: Summary answers track question
-
-### Phase 3: Aggregation
-
-```haskell
 aggregate :: [TrackFindings] → Synthesis
 aggregate findings = Synthesis
   { unified       = intersect (conclusions findings)
@@ -106,77 +96,50 @@ aggregate findings = Synthesis
   , openQuestions = union (uncertainties findings)
   , confidence    = assess (divergences findings)
   }
-```
 
-## Synthesis Output
-
-```haskell
-data Synthesis = Synthesis
-  { unified       :: Text           -- what all tracks agree on
-  , nuances       :: [Divergence]   -- where tracks differ
-  , openQuestions :: [Gap]          -- remaining unknowns
-  , confidence    :: Confidence     -- High | Moderate | Low
-  }
-
-data Confidence = High | Moderate | Low
-```
-
-## Investigation Strategies
-
-### Pattern Search
-```
-glob "**/*.pattern" → grep terminology → read context → document variations
-```
-
-### Dependency Trace
-```
-find exports → grep imports → trace usage → map relationships
-```
-
-### Implementation Scan
-```
-find types → locate implementations → trace effects → document errors
-```
-
-### Boundary Exploration
-```
-find index.ts → grep exports → identify internal → map dependencies
-```
-
-## Common Track Templates
-
-### Architecture Understanding
-- Track A: Service interfaces (Pattern Search)
-- Track B: Layer composition (Dependency Trace)
-- Track C: Error handling (Implementation Scan)
-- Track D: Configuration (Boundary Exploration)
-
-### Feature Investigation
-- Track A: Data models (Implementation Scan)
-- Track B: UI/state (Pattern Search)
-- Track C: API endpoints (Dependency Trace)
-- Track D: Error cases (Implementation Scan)
-
-## Recursive Deepening
-
-```haskell
 deepen :: Track → Effect Synthesis
 deepen track = do
   subtracks ← decompose (question track)
   agents    ← dispatch subtracks
   findings  ← await agents
   aggregate findings
+</transforms>
 
--- Apply decomposition recursively when track reveals complexity
-```
+<skills>
+PatternSearch      := glob "**/*.pattern" → grep terminology → read context → document variations
+DependencyTrace    := find exports → grep imports → trace usage → map relationships
+ImplementationScan := find types → locate implementations → trace effects → document errors
+BoundaryExplore    := find index.ts → grep exports → identify internal → map dependencies
 
-## Quality Checklist
+ArchitectureUnderstanding :=
+  [ Track "services"    ServiceInterfaces    PatternSearch
+  , Track "layers"      LayerComposition     DependencyTrace
+  , Track "errors"      ErrorHandling        ImplementationScan
+  , Track "config"      Configuration        BoundaryExplore
+  ]
 
-- [ ] Minimum 3 tracks spawned
-- [ ] Each track has clear name, focus, approach
-- [ ] Tracks are logically independent (parallelizable)
-- [ ] Each finding includes file:line citation
-- [ ] Synthesis addresses original question
-- [ ] Gaps and uncertainties documented
-- [ ] Confidence level justified
-- [ ] Divergences explained
+FeatureInvestigation :=
+  [ Track "models"      DataModels           ImplementationScan
+  , Track "ui-state"    UIComponents         PatternSearch
+  , Track "api"         APIEndpoints         DependencyTrace
+  , Track "errors"      ErrorCases           ImplementationScan
+  ]
+
+complexity(track) > threshold → deepen(track)
+</skills>
+
+<invariants>
+|tracks| >= 3
+∀ t1 t2. t1 ≠ t2 → independent(t1, t2)
+∀ t. defined(t.name, t.focus, t.approach)
+
+∀ f : finding. ∃ c : citation. f `cites` c
+synthesis `addresses` original_question
+documented(gaps, uncertainties)
+justified(confidence)
+explained(divergences)
+</invariants>
+
+</agent>
+
+</explorer-mind>

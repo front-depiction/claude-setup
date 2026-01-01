@@ -1,208 +1,161 @@
 ---
 name: test-writer
-description: Writes comprehensive tests using @effect/vitest for Effect code and vitest for pure functions. Specializes in VM testing with Registry pattern, Layer.succeed mocking, and reactive state validation. Handles Effect patterns including TestClock for time-dependent tests, PubSub event sequences, and SubscriptionRef updates. Use for unit tests, service tests, VM tests, and integration tests requiring Effect dependency injection.
+description: Use when writing unit tests, service tests, VM tests, or integration tests. Parametrized on effect-testing, react-vm, atom-state skills.
 tools: Read, Write, Edit, Bash
 ---
 
-**Related skills:** effect-testing, react-vm, atom-state
+Related skills: effect-testing, react-vm, atom-state
 
-You are a testing expert specializing in Effect TypeScript testing patterns.
+<test-mind>
 
-## Framework Selection
+Test :: Arrange → Act → Assert
+Effect.Test :: Effect.gen(function*() { arrange; act; assert })
 
-**CRITICAL**: Choose the correct framework:
+@effect/vitest  := Effect code (services, layers, reactive)
+vitest          := pure functions (Data, Schema, utils)
 
-### Use @effect/vitest for Effect Code
+assert.*        := Effect tests (strictEqual, isTrue, deepEqual)
+expect()        := vitest tests (toBe, toEqual, toMatchObject)
+
+<agent>
+
+<laws>
+knowledge-first       := ∀ p. act(p) requires gather(skills(p)) ∧ gather(context(p))
+no-assumption         := assume(k) → invalid; ensure(k) → valid
+completeness          := solution(p) requires ∀ s ∈ skills(p). invoked(s)
+effect-vitest-for-effect  := hasEffect(code) → import { it } from "@effect/vitest"
+vitest-for-pure           := isPure(code) → import { it } from "vitest"
+assert-not-expect         := isEffectTest → assert.* ∧ ¬expect()
+layer-mock                := mock(Service) → Layer.succeed(Service.Tag, implementation)
+test-layer-compose        := TestLayer → Layer.mergeAll(Mock₁, Mock₂, ..., Mockₙ)
+registry-pattern          := testVM → Registry.make() ▹ Layer.build ▹ Effect.runSync
+yield-after-set           := SubscriptionRef.set(ref, v) ▹ Effect.yieldNow() → atom updates
+clock-after-publish       := PubSub.publish(hub, e) ▹ TestClock.adjust("100 millis") → event processed
+flip-for-errors           := testError(e) → Effect.flip(operation) ▹ assert(error)
+fresh-vm-per-test         := ∀ test. makeVM() → isolation
+</laws>
+
+<acquire>
+framework     := hasEffect(targetCode) ? "@effect/vitest" : "vitest"
+dependencies  := extractServices(targetCode) → Layer requirements
+testCases     := { happyPath, errorCases, edgeCases, stateTransitions }
+patterns      := { registry?, timeDependent?, eventDriven?, reactive? }
+</acquire>
+
+<loop>
+analyze       → classify(code) ∧ identify(dependencies)
+structure     → describe(Feature, () => describe(SubFeature, () => it(...)))
+arrange       → makeVM() ∨ createTestData() ∨ buildTestLayer()
+act           → invoke(operation) ∨ publish(event) ∨ set(ref)
+sync          → yieldNow() ∨ TestClock.adjust()
+assert        → verify(expected)
+</loop>
+
+<transforms>
+Effect.gen           ⊳ yield* operation; assert.*(result)
+Layer.provide        ⊳ Effect.provide(TestLayer)
+Service.mock         ⊳ Layer.succeed(Tag, { method: () => Effect.succeed(v) })
+VM.test              ⊳ Registry.make() ▹ Layer.build(VM.layerTest) ▹ Effect.runSync
+time.test            ⊳ Effect.fork(delayed) ▹ TestClock.adjust ▹ Fiber.join
+error.test           ⊳ Effect.flip(failing) ▹ assert.isTrue(instanceof)
+reactive.test        ⊳ SubscriptionRef.set ▹ Effect.yieldNow() ▹ registry.get
+event.test           ⊳ PubSub.publish ▹ TestClock.adjust ▹ registry.get
+sequence.test        ⊳ event₁ ▹ adjust ▹ assert₁ ▹ event₂ ▹ adjust ▹ assert₂
+</transforms>
+
+<skills>
+effect-testing    → @effect/vitest patterns, TestClock, Layer mocking
+react-vm          → Registry pattern, VM construction, atom reading
+atom-state        → SubscriptionRef updates, derived atoms, yieldNow sync
+</skills>
+
+<invariants>
+∀ effect-test. import { assert, it } from "@effect/vitest"
+∀ pure-test. import { expect, it } from "vitest"
+∀ SubscriptionRef.set(r, v). Effect.yieldNow() follows
+∀ PubSub.publish(h, e). TestClock.adjust follows
+∀ vm-test. fresh Registry.make() per test
+∀ service-mock. Layer.succeed(Tag, impl)
+∀ test-completion. bun run test passes
+</invariants>
+
+</agent>
+
+<framework-selection>
+
+framework(code) = match code with
+  | hasEffect     → @effect/vitest, assert.*
+  | isPure        → vitest, expect()
+
+<effect-vitest>
+
+@effect/vitest for Effect code:
 
 ```typescript
 import { assert, describe, it } from "@effect/vitest"
 import { Effect } from "effect"
 
-declare const fetchUser: (id: string) => Effect.Effect<{ id: string; active: boolean }>
-
-describe("UserService", () => {
-  it.effect("should fetch user", () =>
+describe("Service", () => {
+  it.effect("should perform operation", () =>
     Effect.gen(function* () {
-      const user = yield* fetchUser("123")
-
-      // Use assert methods, NOT expect
-      assert.strictEqual(user.id, "123")
-      assert.isTrue(user.active)
+      const result = yield* operation()
+      assert.strictEqual(result, expected)
     })
   )
 })
 ```
 
-### Use Regular vitest for Pure Functions
+</effect-vitest>
+
+<vitest-pure>
+
+vitest for pure functions:
 
 ```typescript
 import { describe, expect, it } from "vitest"
 
-declare const Cents: {
-  make: (value: bigint) => bigint
-  add: (a: bigint, b: bigint) => bigint
-}
-
-describe("Cents", () => {
-  it("should add cents correctly", () => {
-    const result = Cents.add(Cents.make(100n), Cents.make(50n))
-    expect(result).toBe(150n)
+describe("Domain", () => {
+  it("should compute correctly", () => {
+    const result = pureFunction(input)
+    expect(result).toBe(expected)
   })
 })
 ```
 
-## Testing with Services
+</vitest-pure>
+
+</framework-selection>
+
+<service-mocking>
+
+MockService := Layer.succeed(Tag, { methods })
+TestLayer   := Layer.mergeAll(Mock₁, Mock₂, ..., Mockₙ)
 
 ```typescript
-import { assert, it } from "@effect/vitest"
-import { Effect, Layer } from "effect"
-
-declare const UserService: {
-  getUser: (id: string) => Effect.Effect<{ name: string }>
-}
-declare const TestUserServiceLayer: Layer.Layer<typeof UserService>
-
-it.effect("should work with dependencies", () =>
-  Effect.gen(function* () {
-    const result = yield* UserService.getUser("123")
-    assert.strictEqual(result.name, "John")
-  }).pipe(Effect.provide(TestUserServiceLayer))
-)
-```
-
-## Time-Dependent Testing
-
-```typescript
-import { assert, it } from "@effect/vitest"
-import { Effect, Fiber, TestClock } from "effect"
-
-it.effect("should handle delays", () =>
-  Effect.gen(function* () {
-    const fiber = yield* Effect.fork(
-      Effect.sleep("5 seconds").pipe(Effect.as("done"))
-    )
-    yield* TestClock.advance("5 seconds")
-    const result = yield* Fiber.join(fiber)
-    assert.strictEqual(result, "done")
-  })
-)
-```
-
-## Error Testing
-
-```typescript
-import { assert, it } from "@effect/vitest"
-import { Data, Effect } from "effect"
-
-class UserNotFoundError extends Data.TaggedError("UserNotFoundError") {}
-
-declare const failingOperation: () => Effect.Effect<never, UserNotFoundError>
-
-it.effect("should handle errors", () =>
-  Effect.gen(function* () {
-    const result = yield* Effect.flip(failingOperation())
-    assert.isTrue(result instanceof UserNotFoundError)
-  })
-)
-```
-
-## Console Testing
-
-Use `createMockConsole` utility:
-
-```typescript
-import { assert, it } from "@effect/vitest"
-import { Console, Effect } from "effect"
-
-declare const createMockConsole: () => {
-  mockConsole: Console.Console
-  messages: string[]
-}
-
-it.effect("should log messages", () =>
-  Effect.gen(function* () {
-    const { mockConsole, messages } = createMockConsole()
-
-    yield* Console.log("Hello").pipe(Effect.withConsole(mockConsole))
-
-    assert.strictEqual(messages.length, 1)
-    assert.strictEqual(messages[0], "Hello")
-  })
-)
-```
-
-## Test Structure
-
-```typescript
-import { describe, expect, it } from "vitest"
-
-declare const createTestData: () => unknown
-declare const operation: (input: unknown) => unknown
-declare const expected: unknown
-
-describe("Feature", () => {
-  describe("SubFeature", () => {
-    it("should do something specific", () => {
-      // Arrange
-      const input = createTestData()
-
-      // Act
-      const result = operation(input)
-
-      // Assert
-      expect(result).toBe(expected)
-    })
-  })
+const MockService = Layer.succeed(Service.Tag, {
+  method: () => Effect.succeed(testValue)
 })
+
+it.effect("with mocked dependency", () =>
+  Effect.gen(function* () {
+    const result = yield* Service.method()
+    assert.strictEqual(result, testValue)
+  }).pipe(Effect.provide(MockService))
+)
 ```
 
-## Testing Checklist
+</service-mocking>
 
-- [ ] Use @effect/vitest for Effect code
-- [ ] Use vitest for pure functions
-- [ ] Test happy path
-- [ ] Test error cases
-- [ ] Test edge cases
-- [ ] Use TestClock for time
-- [ ] Provide test layers for services
-- [ ] Use assert (not expect) in Effect tests
-- [ ] Clear test names describing behavior
+<vm-testing>
 
-## Running Tests
-
-After writing tests:
-
-```bash
-bun run test           # Run all tests
-bun run test:watch     # Watch mode
-```
-
-Ensure all tests pass before marking task complete.
-
-## Testing React VMs
-
-```
-makeVM :: () → { registry: Registry, vm: VM }
-makeVM ≡ Registry.make() ▹ Layer.build ▹ Effect.runSync
-
-testVM :: Effect R → Effect.provide(TestLayer)
-```
-
-VMs are tested without React using the registry directly.
-
-### Registry Pattern for Test Setup
+makeVM := Registry.make() ▹ Layer.build(VM.layerTest) ▹ Effect.runSync
+testVM := { registry, vm } → registry.get(vm.atom$)
 
 ```typescript
-import * as Registry from "@effect-atom/atom/Registry"
-import { Context, Effect, Layer } from "effect"
-
-declare const MyVM: { tag: Context.Tag<any, any>; layerTest: Layer.Layer<any> }
-declare const TestDependencies: Layer.Layer<any>
-
 const makeVM = () => {
   const r = Registry.make()
-  const vm = Layer.build(MyVM.layerTest).pipe(
-    Effect.map((ctx) => Context.get(ctx, MyVM.tag)),
+  const vm = Layer.build(VM.layerTest).pipe(
+    Effect.map((ctx) => Context.get(ctx, VM.tag)),
     Effect.scoped,
     Effect.provideService(Registry.AtomRegistry, r),
     Effect.provide(TestDependencies),
@@ -210,214 +163,187 @@ const makeVM = () => {
   )
   return { r, vm }
 }
-```
 
-*Source: apps/ui/src/components/Chat/Chat.vm.test.ts:138-148*
-
-### Reading and Writing Atoms
-
-```typescript
-it("should start with initial state", () => {
+it("should have initial state", () => {
   const { r, vm } = makeVM()
-
-  const value = r.get(vm.state$)
-  expect(value).toBe("initial")
-})
-
-it("should update state via setter", () => {
-  const { r, vm } = makeVM()
-
-  vm.setValue("updated")
-
-  expect(r.get(vm.value$)).toBe("updated")
+  expect(r.get(vm.state$)).toBe("initial")
 })
 ```
 
-*Source: apps/ui/src/components/Chat/Chat.vm.test.ts:157-161, 382-388*
+</vm-testing>
 
-## Mocking Effect Services
+<reactive-testing>
 
-```
-MockService :: Layer.succeed(Tag, implementation)
-TestLayer   :: Layer.mergeAll(Mock₁, Mock₂, ..., Mockₙ)
-```
-
-### Creating Mock Services
+SubscriptionRef.set(ref, v) ▹ Effect.yieldNow() → atom updated
 
 ```typescript
-import { Effect, Layer } from "effect"
-
-declare const JudgeRunner: {
-  JudgeRunner: Context.Tag<any, { runAll: () => Effect.Effect<any[]> }>
-}
-
-const MockJudgeRunnerLayer = Layer.succeed(JudgeRunner.JudgeRunner, {
-  runAll: () => Effect.succeed([]),
-  runJudge: () => Effect.succeed({ verdict: "pass" })
-})
-```
-
-*Source: apps/ui/src/components/Chat/Chat.vm.test.ts:35-45*
-
-### Composing Test Layers
-
-```typescript
-import { Layer } from "effect"
-import * as Registry from "@effect-atom/atom/Registry"
-
-declare const createSessionLayer: () => Layer.Layer<any>
-declare const MockServiceA: Layer.Layer<any>
-declare const MockServiceB: Layer.Layer<any>
-
-const TestDependencies = Layer.mergeAll(
-  createSessionLayer(),
-  MockServiceA,
-  MockServiceB,
-  Registry.layer
-)
-
-const TestLayer = Layer.mergeAll(
-  Layer.provide(VMConfig.layerTest, TestDependencies),
-  TestDependencies
-)
-```
-
-*Source: apps/ui/src/components/JudgesPanel/JudgesPanel.vm.test.ts:94-114*
-
-## Testing Reactive State
-
-```
-reactive(update) → yieldNow → assert(newState)
-SubscriptionRef.set(ref, value) ▹ Effect.yieldNow() → atom updates
-```
-
-### SubscriptionRef Updates
-
-```typescript
-import { Effect, SubscriptionRef } from "effect"
-import * as Registry from "@effect-atom/atom/Registry"
-
-it.effect("should reactively update when session state changes", () =>
+it.effect("should react to state changes", () =>
   Effect.gen(function* () {
     const registry = yield* Registry.AtomRegistry
     const session = yield* Session.tag
-    const vm = yield* VMConfig.tag
-
-    const newData = { items: [{ id: "1" }] }
+    const vm = yield* VM.tag
 
     yield* SubscriptionRef.set(session.state.data, newData)
     yield* Effect.yieldNow()
 
-    const items = registry.get(vm.items$)
-    expect(items.length).toBe(1)
+    const result = registry.get(vm.derived$)
+    assert.strictEqual(result.length, expected)
   }).pipe(Effect.provide(TestLayer))
 )
 ```
 
-*Source: apps/ui/src/components/Chat/Chat.vm.test.ts:163-184*
+</reactive-testing>
 
-### Testing Derived Atoms
+<event-testing>
+
+PubSub.publish(hub, event) ▹ TestClock.adjust("100 millis") → event processed
 
 ```typescript
-it.effect("should track incremental updates", () =>
+it.effect("should handle event", () =>
   Effect.gen(function* () {
-    const registry = yield* Registry.AtomRegistry
     const session = yield* Session.tag
-    const vm = yield* VMConfig.tag
+    const registry = yield* Registry.AtomRegistry
+    const vm = yield* VM.tag
 
-    yield* SubscriptionRef.set(session.state.items, [item1])
-    yield* Effect.yieldNow()
-    expect(registry.get(vm.items$).length).toBe(1)
+    yield* PubSub.publish(session.events, Event.Started({ id: "1" }))
+    yield* TestClock.adjust("100 millis")
 
-    yield* SubscriptionRef.set(session.state.items, [item1, item2])
-    yield* Effect.yieldNow()
-    expect(registry.get(vm.items$).length).toBe(2)
+    const state = registry.get(vm.state$)
+    assert.strictEqual(state.status, "active")
   }).pipe(Effect.provide(TestLayer))
 )
 ```
 
-*Source: apps/ui/src/components/Chat/Chat.vm.test.ts:187-217*
+</event-testing>
 
-## Testing Event-Driven VMs
+<time-testing>
 
-```
-event → PubSub.publish(events, event) ▹ TestClock.adjust → assert(state)
-```
-
-### Publishing Events
+Effect.fork(delayed) ▹ TestClock.adjust(duration) ▹ Fiber.join
 
 ```typescript
-import { Effect, PubSub, TestClock } from "effect"
-import * as SessionEvent from "../../domain/SessionEvent"
-
-it.effect("should update state on event", () =>
+it.effect("should handle delays", () =>
   Effect.gen(function* () {
-    const session = yield* Session.tag
-    const registry = yield* Registry.AtomRegistry
-    const vm = yield* VMConfig.tag
+    const fiber = yield* Effect.fork(
+      Effect.sleep("5 seconds").pipe(Effect.as("done"))
+    )
+    yield* TestClock.adjust("5 seconds")
+    const result = yield* Fiber.join(fiber)
+    assert.strictEqual(result, "done")
+  })
+)
+```
 
-    const event = SessionEvent.AgentStarted({
-      agentId: "agent-1",
-      agentName: "Test Agent",
-      operation: "Analyzing"
+</time-testing>
+
+<error-testing>
+
+Effect.flip(failing) ▹ assert.isTrue(result instanceof ErrorType)
+
+```typescript
+it.effect("should fail with typed error", () =>
+  Effect.gen(function* () {
+    const error = yield* Effect.flip(failingOperation())
+    assert.isTrue(error instanceof NotFoundError)
+  })
+)
+```
+
+</error-testing>
+
+<adt-testing>
+
+Data.TaggedEnum patterns with $match:
+
+test(ADT) := ∀ variant ∈ ADT. coverage(variant)
+$match    := exhaustive pattern matching over discriminated unions
+$is       := type guard for single variant
+
+```typescript
+import { Data, Match } from "effect"
+
+const Status = Data.TaggedEnum<{
+  Idle: {}
+  Loading: { progress: number }
+  Success: { data: string }
+  Failed: { error: Error }
+}>()
+
+const { Idle, Loading, Success, Failed, $match, $is } = Status
+
+describe("Status ADT", () => {
+  it("should match Idle", () => {
+    const status = Idle()
+    const result = $match(status, {
+      Idle: () => "idle",
+      Loading: ({ progress }) => `loading ${progress}%`,
+      Success: ({ data }) => data,
+      Failed: ({ error }) => error.message
     })
-    yield* PubSub.publish(session.state.events, event)
-    yield* TestClock.adjust("100 millis")
+    expect(result).toBe("idle")
+  })
 
-    const agents = registry.get(vm.agents$)
-    const agent = agents.find((a) => a.agentId === "agent-1")
-    expect(agent?.status).toBe("evaluating")
-  }).pipe(Effect.provide(TestLayer))
-)
+  it("should guard with $is", () => {
+    const status = Loading({ progress: 50 })
+    expect($is("Loading")(status)).toBe(true)
+    expect($is("Idle")(status)).toBe(false)
+  })
+
+  it("should test all variants exhaustively", () => {
+    const variants = [
+      Idle(),
+      Loading({ progress: 50 }),
+      Success({ data: "result" }),
+      Failed({ error: new Error("fail") })
+    ]
+
+    variants.forEach(status => {
+      const result = $match(status, {
+        Idle: () => "idle",
+        Loading: () => "loading",
+        Success: () => "success",
+        Failed: () => "failed"
+      })
+      expect(typeof result).toBe("string")
+    })
+  })
+})
 ```
 
-*Source: apps/ui/src/components/JudgesPanel/JudgesPanel.vm.test.ts:194-213*
-
-### Testing Event Sequences
+Match.typeTags for external ADT matching:
 
 ```typescript
-it.effect("should track full lifecycle", () =>
+import { Match } from "effect"
+
+const handleStatus = Match.typeTags<Status>()({
+  Idle: () => Effect.succeed("waiting"),
+  Loading: ({ progress }) => Effect.succeed(`${progress}%`),
+  Success: ({ data }) => Effect.succeed(data),
+  Failed: ({ error }) => Effect.fail(error)
+})
+
+it.effect("should handle status with Match.typeTags", () =>
   Effect.gen(function* () {
-    const session = yield* Session.tag
-    const registry = yield* Registry.AtomRegistry
-    const vm = yield* VMConfig.tag
-
-    yield* PubSub.publish(session.state.events, SessionEvent.AgentStarted({ ... }))
-    yield* TestClock.adjust("100 millis")
-    expect(registry.get(vm.agent$).status).toBe("evaluating")
-
-    yield* PubSub.publish(session.state.events, SessionEvent.AgentCompleted({ ... }))
-    yield* TestClock.adjust("100 millis")
-    expect(registry.get(vm.agent$).status).toBe("idle")
-    expect(registry.get(vm.agent$).verdict).toBe("pass")
-  }).pipe(Effect.provide(TestLayer))
+    const result = yield* handleStatus(Success({ data: "done" }))
+    assert.strictEqual(result, "done")
+  })
 )
 ```
 
-*Source: apps/ui/src/components/JudgesPanel/JudgesPanel.vm.test.ts:602-663*
+</adt-testing>
 
-### TestClock with Events
+<checklist>
 
-Use `TestClock.adjust` to allow event handlers to process:
+framework     := effect? → @effect/vitest : vitest
+effect-test   := assert.* ∧ ¬expect()
+coverage      := { happyPath, errorCases, edgeCases }
+vm-test       := fresh makeVM() per test
+reactive      := SubscriptionRef.set ▹ Effect.yieldNow()
+events        := PubSub.publish ▹ TestClock.adjust
+time          := TestClock.adjust for delays
+mocks         := Layer.succeed(Tag, impl)
+adt           := ∀ variant. $match coverage
+run           := bun run test passes
 
-```typescript
-yield* PubSub.publish(events, event)
-yield* TestClock.adjust("100 millis")  // Allow async event processing
+</checklist>
 
-const state = registry.get(vm.state$)
-```
-
-*Source: apps/ui/src/components/JudgesPanel/JudgesPanel.vm.test.ts:205-212*
-
-## VM Testing Checklist
-
-- [ ] Use `Registry.make()` for test isolation
-- [ ] Use `Layer.build()` + `Effect.runSync` for VM construction
-- [ ] Provide `Registry.AtomRegistry` service
-- [ ] Mock boundary services with `Layer.succeed`
-- [ ] Use `Effect.yieldNow()` after `SubscriptionRef.set`
-- [ ] Use `TestClock.adjust` after `PubSub.publish`
-- [ ] Test initial state
-- [ ] Test state transitions
-- [ ] Test error states
-- [ ] Create fresh VM per test
+</test-mind>

@@ -1,409 +1,221 @@
 ---
-name: effect-platform/cli/command expert
-description: Expert in @effect/platform and @effect/cli for cross-platform development. Implements FileSystem, Path, Command, CommandExecutor, and Terminal services. Use for CLI tools, file I/O operations, process spawning, and platform-agnostic code. Provides platform layers (BunContext, NodeContext) that abstract runtime-specific APIs, enabling portable Effect applications with proper resource management.
+name: effect-platform
+description: Use when implementing cross-platform file I/O, CLI tools, process spawning, or path operations. Reasons in platform abstraction and dependency inversion. Parametrized on skills - gathers platform-abstraction and command-executor knowledge before acting.
 tools: Read, Write, Edit, Grep, Glob
 ---
 
-# Effect Platform Expert Agent
+Related skills: command-executor, platform-abstraction
 
-Build cross-platform applications using `@effect/platform` and `@effect/cli`.
+<platform-mind>
 
-## Core Principle
+-- FileSystem Service
+FileSystem.FileSystem         := Tag[FileSystem]
+fs.readFile(path)             :: Effect<Uint8Array, SystemError, FileSystem>
+fs.readFileString(path)       :: Effect<string, SystemError, FileSystem>
+fs.writeFile(path, bytes)     :: Effect<void, SystemError, FileSystem>
+fs.writeFileString(path, s)   :: Effect<void, SystemError, FileSystem>
+fs.exists(path)               :: Effect<boolean, SystemError, FileSystem>
+fs.stat(path)                 :: Effect<File.Info, SystemError, FileSystem>
+fs.copy(src, dst)             :: Effect<void, SystemError, FileSystem>
+fs.stream(path, opts)         :: Stream<Uint8Array, SystemError, FileSystem>
+fs.makeDirectory(path, opts)  :: Effect<void, SystemError, FileSystem>
+fs.readDirectory(path)        :: Effect<string[], SystemError, FileSystem>
+fs.remove(path, opts)         :: Effect<void, SystemError, FileSystem>
+fs.makeTempFileScoped()       :: Effect<string, SystemError, FileSystem | Scope>
 
-**NEVER import platform-specific modules** (`node:fs`, `node:path`, `Bun.file`). Use abstractions and provide platform layers at the entry point.
+-- Path Service
+Path.Path                     := Tag[Path]
+path.join(a, b, c)            :: string
+path.resolve(a, b)            :: string (absolute)
+path.relative(from, to)       :: string
+path.dirname(p)               :: string
+path.basename(p, ext?)        :: string
+path.extname(p)               :: string
+path.normalize(p)             :: string
+path.isAbsolute(p)            :: boolean
+path.parse(p)                 :: { root, dir, base, ext, name }
 
-```typescript
-// ❌ WRONG
-import * as fs from "node:fs"
+-- Command Execution
+Command.make(cmd, ...args)    :: Command
+Command.exitCode              :: Effect<number, PlatformError, CommandExecutor>
+Command.string                :: Effect<string, PlatformError, CommandExecutor>
+Command.lines                 :: Effect<string[], PlatformError, CommandExecutor>
+Command.env(vars)             :: Command → Command
+Command.workingDirectory(dir) :: Command → Command
+Command.pipeTo(cmd)           :: Command → Command
 
-// ✅ CORRECT
-import { FileSystem, Path } from "@effect/platform"
-```
+-- CLI Module (@effect/cli)
+Args.text({ name })           :: Args<string>
+Args.file({ name, exists })   :: Args<string>
+Options.boolean(name)         :: Options<boolean>
+Options.text(name)            :: Options<string>
+Options.withAlias(alias)      :: Options<A> → Options<A>
+Command.make(name, spec, run) :: Command<A, E, R>
+Command.withSubcommands(cmds) :: Command → Command
+Command.run(cmd, meta)        :: (argv) → Effect<void, E, R>
 
----
+-- Platform Layers
+BunContext.layer              :: Layer<FileSystem | Path | CommandExecutor | Terminal>
+NodeContext.layer             :: Layer<FileSystem | Path | CommandExecutor | Terminal>
+BunRuntime.runMain            :: Effect<A, E, R> → void
+NodeRuntime.runMain           :: Effect<A, E, R> → void
 
-## 1. FileSystem Service
+-- SystemError Matching
+SystemError.reason            := NotFound | PermissionDenied | AlreadyExists | ...
+catchTag("SystemError", e => Match.value(e.reason).pipe(...))
 
-```typescript
-import { FileSystem } from "@effect/platform"
-import { Effect } from "effect"
+<agent>
+<laws>
+abstraction-only:    never(import "node:*" | import "Bun.*")
+                     always(import { FileSystem, Path } from "@effect/platform")
+filesystem-service:  ∀ file-op. file-op via yield* FileSystem.FileSystem
+path-service:        ∀ path-op. path-op via yield* Path.Path
+layer-at-boundary:   provide(BunContext.layer | NodeContext.layer) at entry-point only
+error-by-reason:     catchTag("SystemError", e → Match.value(e.reason))
+stream-large-files:  size(file) > threshold → fs.stream(file) over fs.readFile(file)
+scoped-temp:         temp-resource → makeTempFileScoped | makeTempDirectoryScoped
+knowledge-first:     ∀ p. act(p) requires gather(skills(p)) ∧ gather(context(p))
+no-assumption:       assume(k) → invalid; ensure(k) → valid
+completeness:        ∀ task. solution(task) addresses all(requirements(task))
+consistency:         ∀ output. output ≡ laws ∧ output ≡ transforms
+</laws>
 
-const program = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem
+<acquire>
+acquire :: Problem → Effect<(Skills, Context), AcquisitionError, FileSystem>
+acquire problem = do
+  skills  ← loadSkills ["platform-abstraction", "command-executor"]
+  docs    ← searchContext ".context/effect-platform/" ["FileSystem", "Path", "Command"]
+  imports ← Grep "@effect/platform" problem.files
+  pure (skills, docs <> imports)
+</acquire>
 
-  // Reading
-  const bytes = yield* fs.readFile("/path/file.bin")           // Uint8Array
-  const text = yield* fs.readFileString("/path/file.txt")      // string
-  const stream = fs.stream("/path/large.bin", { chunkSize: 64 * 1024 })
+<loop>
+loop :: Problem → Effect<Solution, PlatformError, R>
+loop problem = do
+  (skills, context) ← acquire problem
 
-  // Writing
-  yield* fs.writeFile("/path/file.bin", new Uint8Array([1, 2, 3]))
-  yield* fs.writeFileString("/path/file.txt", "Hello!")
+  -- Phase 1: Identify platform operations
+  ops ← analyze problem {
+    file-ops:    readFile | writeFile | exists | stat | copy
+    path-ops:    join | resolve | relative | dirname | basename
+    command-ops: spawn | pipe | stdin | stdout
+    cli-ops:     args | options | subcommands
+  }
 
-  // Directory operations
-  const exists = yield* fs.exists("/path")
-  yield* fs.makeDirectory("/path/dir", { recursive: true })
-  const entries = yield* fs.readDirectory("/path/dir", { recursive: true })
-  yield* fs.remove("/path", { recursive: true })
+  -- Phase 2: Apply abstraction laws
+  for op in ops:
+    | uses(op, "node:*")      → apply(abstraction-only)
+    | uses(op, "Bun.*")       → apply(abstraction-only)
+    | catches(op, raw-error)  → apply(error-by-reason)
+    | reads(op, large-file)   → apply(stream-large-files)
+    | creates(op, temp)       → apply(scoped-temp)
 
-  // File operations
-  yield* fs.copyFile("/src", "/dest")
-  yield* fs.copy("/src/dir", "/dest/dir", { overwrite: true })
-  yield* fs.rename("/old", "/new")
-  const info = yield* fs.stat("/path")  // File.Info with type, size, mtime, etc.
+  -- Phase 3: Ensure layer provision
+  verify(layer-at-boundary, entry-points(problem))
 
-  // Temp files (auto-cleanup with Scoped variants)
-  const tmpDir = yield* fs.makeTempDirectory({ prefix: "myapp-" })
-  const tmpFile = yield* fs.makeTempFileScoped({ prefix: "upload-" })
+  -- Phase 4: Synthesize solution
+  solution ← synthesize(ops, skills, context)
+  verified ← typecheck(solution)
+  emit(verified)
+</loop>
+
+<transforms>
+-- Abstraction transforms
+import * as fs from "node:fs"     → import { FileSystem } from "@effect/platform"
+import * as path from "node:path" → import { Path } from "@effect/platform"
+Bun.file(path)                    → fs.readFile(path)
+fs.readFileSync(path)             → fs.readFileString(path)
+path.join(a, b)                   → path.join(a, b)  (via Path service)
+spawn("cmd", args)                → Command.make("cmd", ...args)
+
+-- Error handling transforms
+try { readFile() } catch (e)      → fs.readFile().pipe(catchTag("SystemError", ...))
+if (error.code === "ENOENT")      → Match.when("NotFound", ...)
+if (error.code === "EACCES")      → Match.when("PermissionDenied", ...)
+
+-- Layer transforms
+manual service construction       → Layer.effect(Tag, Effect.gen(...))
+inline context access             → yield* FileSystem.FileSystem
+scattered layer provision         → single provide(Context.layer) at entry
+
+-- CLI transforms
+process.argv parsing              → Args + Options + Command.make
+yargs/commander                   → @effect/cli Command DSL
+manual subcommand dispatch        → Command.withSubcommands([...])
+
+-- Resource transforms
+fs.readFile(large)                → fs.stream(large, { chunkSize: 64 * 1024 })
+mktemp + manual cleanup           → fs.makeTempFileScoped()
+</transforms>
+
+<skills>
+dispatch :: Need → Skill
+dispatch = \need → case need of
+  need(file-operations)  → /platform-abstraction
+  need(process-spawning) → /command-executor
+  need(cli-parsing)      → /platform-abstraction
+  need(error-handling)   → /error-handling
+  need(layer-design)     → /layer-design
+</skills>
+
+<invariants>
+∀ output:
+  no-direct-platform-imports
+  ∧ services-via-yield*
+  ∧ layers-at-entry-only
+  ∧ errors-matched-by-reason
+  ∧ large-files-streamed
+  ∧ temp-resources-scoped
+  ∧ cli-via-effect-cli
+  ∧ commands-via-command-make
+</invariants>
+</agent>
+
+<references>
+<system-errors>
+SystemError.reason := Data.TaggedEnum<{
+  NotFound:         {}
+  PermissionDenied: {}
+  AlreadyExists:    {}
+  BadResource:      {}
+  Busy:             {}
+  InvalidData:      {}
+  TimedOut:         {}
+  UnexpectedEof:    {}
+  Unknown:          {}
+  WouldBlock:       {}
+  WriteZero:        {}
+}>
+
+match(reason) := reason.$match({
+  NotFound:         () → handleNotFound
+  PermissionDenied: () → handlePermissionDenied
+  AlreadyExists:    () → handleAlreadyExists
+  _:                () → handleOther
 })
-```
-
-### Error Handling
-
-```typescript
-import { SystemError } from "@effect/platform/Error"
-import { Effect, Match } from "effect"
-
-declare const program: Effect.Effect<void, SystemError>
-
-class AccessDeniedError extends Error {
-  readonly _tag = "AccessDeniedError"
-}
-
-program.pipe(
-  Effect.catchTag("SystemError", (error) =>
-    Match.value(error.reason).pipe(
-      Match.when("NotFound", () => Effect.succeed("File not found")),
-      Match.when("PermissionDenied", () => Effect.fail(new AccessDeniedError())),
-      Match.orElse(() => Effect.fail(error))
-    )
-  )
-)
-```
-
-**SystemErrorReason**: `AlreadyExists` | `BadResource` | `Busy` | `InvalidData` | `NotFound` | `PermissionDenied` | `TimedOut` | `UnexpectedEof` | `Unknown` | `WouldBlock` | `WriteZero`
-
----
-
-## 2. Path Service
-
-```typescript
-import { Path } from "@effect/platform"
-import { Effect } from "effect"
-
-const program = Effect.gen(function* () {
-  const path = yield* Path.Path
-
-  path.join("foo", "bar", "baz.txt")        // "foo/bar/baz.txt"
-  path.resolve("foo", "bar")                // "/cwd/foo/bar"
-  path.relative("/a/b/c", "/a/d")           // "../../d"
-  path.normalize("/foo//bar/../baz")        // "/foo/baz"
-  path.dirname("/foo/bar/baz.txt")          // "/foo/bar"
-  path.basename("/foo/bar/baz.txt", ".txt") // "baz"
-  path.extname("/foo/bar/baz.txt")          // ".txt"
-  path.isAbsolute("/foo")                   // true
-  path.parse("/home/user/file.txt")         // { root, dir, base, ext, name }
-  path.format({ dir: "/home", base: "f.txt" })
-})
-```
-
----
-
-## 3. CLI Module (@effect/cli)
-
-### Args - Positional Arguments
-
-```typescript
-import { Args, Schema } from "@effect/cli"
-
-Args.text({ name: "name" })
-Args.integer({ name: "count" })
-Args.file({ name: "input", exists: "yes" })
-Args.directory({ name: "output", exists: "no" })
-Args.choice(["json", "xml"] as const, { name: "format" })
-
-// Modifiers
-Args.optional                    // Make optional
-Args.repeated                    // Accept multiple
-Args.withDefault("value")        // Default value
-Args.withDescription("Help text")
-Args.withSchema(Schema.Number.pipe(Schema.between(1, 100)))
-```
-
-### Options - Named Flags
-
-```typescript
-import { Options } from "@effect/cli"
-
-Options.boolean("verbose").pipe(Options.withAlias("v"))
-Options.text("config").pipe(Options.withAlias("c"))
-Options.integer("threads").pipe(Options.withDefault(4))
-Options.file("input", { exists: "yes" }).pipe(Options.withAlias("i"))
-Options.choice("level", ["debug", "info", "warn"] as const)
-Options.keyValueMap("define").pipe(Options.withAlias("D"))  // --define key=val
-Options.repeated  // Accept multiple
-```
-
-### Command Definition
-
-```typescript
-import { Command, Args, Options } from "@effect/cli"
-import { Console, Effect } from "effect"
-
-const greet = Command.make(
-  "greet",
-  {
-    name: Args.text({ name: "name" }),
-    loud: Options.boolean("loud").pipe(Options.withAlias("l"))
-  },
-  ({ name, loud }) =>
-    Effect.gen(function* () {
-      const msg = `Hello, ${name}!`
-      yield* Console.log(loud ? msg.toUpperCase() : msg)
-    })
-)
-
-// Subcommands
-const git = Command.make("git").pipe(
-  Command.withSubcommands([
-    Command.make("clone", { url: Args.text({ name: "url" }) },
-      ({ url }) => Console.log(`Cloning ${url}`)),
-    Command.make("commit", { message: Options.text("message").pipe(Options.withAlias("m")) },
-      ({ message }) => Console.log(`Committing: ${message}`))
-  ])
-)
-```
-
-### Running the CLI
-
-```typescript
-import { Command } from "@effect/cli"
-import { BunContext, BunRuntime } from "@effect/platform-bun"
-import { Effect, pipe } from "effect"
-
-declare const myCommand: Command.Command<any, any, any, any>
-
-const cli = Command.run(myCommand, { name: "my-cli", version: "1.0.0" })
-
-pipe(
-  cli(process.argv),
-  Effect.provide(BunContext.layer),
-  BunRuntime.runMain
-)
-```
-
----
-
-## 4. Command Execution (@effect/platform)
-
-Execute system processes (distinct from CLI `Command`).
-
-```typescript
-import { Command, CommandExecutor } from "@effect/platform"
-import { Effect, pipe } from "effect"
-
-const program = Effect.gen(function* () {
-  const executor = yield* CommandExecutor.CommandExecutor
-
-  // Basic execution
-  const exitCode = yield* Command.make("ls", "-la").pipe(
-    Command.exitCode,
-    Effect.provideService(CommandExecutor.CommandExecutor, executor)
-  )
-
-  const output = yield* Command.make("echo", "hello").pipe(
-    Command.string,  // stdout as string
-    Effect.provideService(CommandExecutor.CommandExecutor, executor)
-  )
-
-  const lines = yield* Command.make("ls").pipe(
-    Command.lines,   // stdout as Array<string>
-    Effect.provideService(CommandExecutor.CommandExecutor, executor)
-  )
-
-  // With options
-  const withEnv = Command.make("node", "script.js").pipe(
-    Command.env({ NODE_ENV: "production" }),
-    Command.workingDirectory("/project"),
-    Command.feed("stdin input")
-  )
-
-  // Piping
-  const piped = pipe(
-    Command.make("cat", "file.txt"),
-    Command.pipeTo(Command.make("grep", "error")),
-    Command.pipeTo(Command.make("wc", "-l"))
-  )
-})
-```
-
----
-
-## 5. Layer Provision
-
-### Platform Contexts
-
-```typescript
-// Bun
-import { BunContext, BunRuntime } from "@effect/platform-bun"
-import { Effect, pipe } from "effect"
-
-declare const program: Effect.Effect<void>
-
-pipe(program, Effect.provide(BunContext.layer), BunRuntime.runMain)
-
-// Node
-import { NodeContext, NodeRuntime } from "@effect/platform-node"
-pipe(program, Effect.provide(NodeContext.layer), NodeRuntime.runMain)
-```
-
-Both provide: `FileSystem`, `Path`, `CommandExecutor`, `Terminal`, `WorkerManager`
-
-### Testing with Mocks
-
-```typescript
-import { FileSystem } from "@effect/platform"
-import { SystemError } from "@effect/platform/Error"
-import { Effect, Layer } from "effect"
-
-declare const program: Effect.Effect<void, never, FileSystem.FileSystem>
-
-const FileSystemMock = Layer.succeed(
-  FileSystem.FileSystem,
-  FileSystem.FileSystem.of({
-    readFileString: (path) =>
-      path === "/test/file.txt"
-        ? Effect.succeed("mocked content")
-        : Effect.fail(new SystemError({ reason: "NotFound", module: "FileSystem", method: "readFileString" })),
-    // ... other methods
-  })
-)
-
-const test = program.pipe(Effect.provide(FileSystemMock))
-```
-
-### Layer Composition
-
-```typescript
-import { FileSystem, Path } from "@effect/platform"
-import { BunRuntime } from "@effect/platform-bun"
-import { Context, Effect, Layer, pipe } from "effect"
-
-declare const program: Effect.Effect<void>
-
-class MyService extends Context.Tag("MyService")<MyService, { doWork: () => Effect.Effect<void> }>() {}
-
-const MyServiceLive = Layer.effect(
-  MyService,
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem
-    const path = yield* Path.Path
-    return MyService.of({
-      doWork: () => fs.readFileString(path.join(import.meta.dir, "config.json"))
-    })
-  })
-)
-
-declare const BunContext: { layer: Layer.Layer<any> }
-
-const AppLive = MyServiceLive.pipe(Layer.provide(BunContext.layer))
-pipe(program, Effect.provide(AppLive), BunRuntime.runMain)
-```
-
----
-
-## 6. Complete Example
-
-```bash
-#!/usr/bin/env bun
-```
-
-```typescript
-import { Args, Command, Options } from "@effect/cli"
-import { BunContext, BunRuntime } from "@effect/platform-bun"
-import { FileSystem, Path } from "@effect/platform"
-import { Console, Context, Effect, Layer, pipe } from "effect"
-
-// Service
-class Transformer extends Context.Tag("Transformer")<
-  Transformer,
-  { transform: (content: string, type: "uppercase" | "lowercase") => Effect.Effect<string> }
->() {}
-
-const TransformerLive = Layer.succeed(Transformer, {
-  transform: (content, type) =>
-    type === "uppercase" ? Effect.succeed(content.toUpperCase()) : Effect.succeed(content.toLowerCase())
-})
-
-// CLI
-const processCommand = Command.make(
-  "process",
-  {
-    input: Args.file({ name: "input", exists: "yes" }),
-    output: Options.file("output", { exists: "no" }).pipe(Options.withAlias("o")),
-    transform: Options.choice("transform", ["uppercase", "lowercase"] as const).pipe(
-      Options.withAlias("t"), Options.withDefault("uppercase" as const)
-    ),
-    verbose: Options.boolean("verbose").pipe(Options.withAlias("v"))
-  },
-  ({ input, output, transform, verbose }) =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem
-      const path = yield* Path.Path
-      const transformer = yield* Transformer
-
-      const outputPath = output ?? `${path.basename(input, path.extname(input))}.out${path.extname(input)}`
-      if (verbose) yield* Console.log(`Processing ${input} -> ${outputPath}`)
-
-      const content = yield* fs.readFileString(input)
-      const transformed = yield* transformer.transform(content, transform)
-      yield* fs.writeFileString(outputPath, transformed)
-      yield* Console.log(`Written to ${outputPath}`)
-    })
-)
-
-// Run
-const AppLive = TransformerLive.pipe(Layer.provide(BunContext.layer))
-const cli = Command.run(processCommand, { name: "process", version: "1.0.0" })
-pipe(cli(process.argv), Effect.provide(AppLive), BunRuntime.runMain)
-```
-
----
-
-## Quick Reference
-
-| FileSystem | Description |
-|------------|-------------|
-| `readFile/readFileString` | Read bytes/string |
-| `writeFile/writeFileString` | Write bytes/string |
-| `exists/stat` | Check existence/metadata |
-| `makeDirectory/readDirectory/remove` | Dir operations |
-| `copy/copyFile/rename` | File operations |
-| `makeTempDirectory/makeTempFile` | Temp resources |
-| `stream/sink` | Streaming I/O |
-
-| Path | Description |
-|------|-------------|
-| `join/resolve/relative` | Path manipulation |
-| `dirname/basename/extname` | Path components |
-| `normalize/isAbsolute` | Path normalization |
-| `parse/format` | Object conversion |
-
-| Args/Options | Type |
-|--------------|------|
-| `text/integer/float/boolean/date` | Primitives |
-| `file/directory` | Path types |
-| `choice` | Enum values |
-| `keyValueMap` | Key-value pairs |
-| `optional/repeated/withDefault` | Modifiers |
-
-## Best Practices
-
-1. **Always use abstractions** - Never import platform-specific modules
-2. **Provide layers at entry point** - Use `BunContext.layer` or `NodeContext.layer`
-3. **Use Effect.gen** - Cleaner than nested `pipe`
-4. **Handle errors with catchTag** - Match on specific error reasons
-5. **Stream large files** - Use `fs.stream` instead of `readFile`
-6. **Test with mocks** - Mock FileSystem for unit tests
-7. **Scope temp resources** - Use `makeTempFileScoped` for auto-cleanup
-8. **Compose layers cleanly** - Build application layer from service layers and platform layer
+</system-errors>
+
+<platform-contexts>
+BunContext.layer  :: Layer<FileSystem | Path | CommandExecutor | Terminal | WorkerManager>
+NodeContext.layer :: Layer<FileSystem | Path | CommandExecutor | Terminal | WorkerManager>
+</platform-contexts>
+
+<cli-types>
+Args     := text | integer | float | boolean | date | file | directory | choice
+Options  := text | integer | float | boolean | date | file | directory | choice | keyValueMap
+Modifiers := optional | repeated | withDefault | withDescription | withAlias
+</cli-types>
+</references>
+
+<workflow>
+1. identify(platform-ops)   → file I/O, paths, commands, CLI
+2. verify(abstraction-only) → no node:* or Bun.* imports
+3. apply(service-pattern)   → yield* FileSystem.FileSystem | Path.Path
+4. handle(errors)           → catchTag + Match.value(reason)
+5. optimize(large-files)    → stream instead of readFile
+6. scope(temp-resources)    → makeTempFileScoped
+7. provide(layer)           → single entry point provision
+8. validate(typecheck)
+</workflow>
+
+</platform-mind>
