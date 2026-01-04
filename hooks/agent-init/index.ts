@@ -113,7 +113,7 @@ export const program = Effect.gen(function* () {
   const structureCapture = yield* ProjectStructureCapture
 
   // Capture all context in parallel
-  const [treeOutput, gitStatus, latestCommit, previousCommits, branchContext, githubIssues, githubPRs, moduleSummary, projectVersion, packageScripts, miseTasks] = yield* Effect.all([
+  const [treeOutput, gitStatus, latestCommit, previousCommits, branchContext, githubIssues, githubPRs, moduleSummary, projectVersion, packageScripts, miseTasks, repoInfo, recentAuthors] = yield* Effect.all([
     structureCapture.capture(),
     pipe(
       Command.make("git", "status", "--short"),
@@ -200,8 +200,38 @@ export const program = Effect.gen(function* () {
       Effect.map(formatMiseTasks),
       Effect.catchAll(() => Effect.succeed("")),
       Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+    ),
+    pipe(
+      Command.make("gh", "repo", "view", "--json", "owner,name", "-q", ".owner.login + \"/\" + .name"),
+      Command.workingDirectory(config.projectDir),
+      Command.string,
+      Effect.map(s => s.trim()),
+      Effect.catchAll(() => Effect.succeed("")),
+      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+    ),
+    pipe(
+      Command.make("git", "log", "--since=7 days ago", "--format=%an", "--no-merges"),
+      Command.workingDirectory(config.projectDir),
+      Command.string,
+      Effect.map(out => [...new Set(out.trim().split("\n").filter(Boolean))].join(", ")),
+      Effect.catchAll(() => Effect.succeed("")),
+      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
     )
   ], { concurrency: "unbounded" })
+
+  // Fetch collaborators (depends on repoInfo)
+  const collaborators = yield* pipe(
+    repoInfo
+      ? pipe(
+        Command.make("gh", "api", `repos/${repoInfo}/collaborators`, "-q", `.[] | "\\(.login):\\(.role_name)"`),
+        Command.workingDirectory(config.projectDir),
+        Command.string,
+        Effect.map(s => s.trim()),
+        Effect.catchAll(() => Effect.succeed("")),
+        Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+      )
+      : Effect.succeed("")
+  )
 
   // Build context output with mathematical notation
   const output = `<session-context>
@@ -511,6 +541,16 @@ ${previousCommits || "(none)"}
 <current>${branchContext.current || "(detached)"}</current>
 ${branchContext.recent.length > 0 ? `<recent>\n${branchContext.recent.join("\n")}\n</recent>` : ""}
 </branch-context>
+
+<collaborators>
+<team>
+${collaborators.split("\n").filter(Boolean).map(line => {
+    const [login, role] = line.split(":")
+    return `  <person github="${login}" role="${role || "unknown"}"/>`
+  }).join("\n") || "  (unavailable)"}
+</team>
+<recently-active window="7d">${recentAuthors || "(none)"}</recently-active>
+</collaborators>
 
 <github-context>
 ${githubIssues ? `<open-issues>\n${githubIssues}\n</open-issues>` : "<open-issues>(none)</open-issues>"}
