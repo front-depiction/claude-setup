@@ -1,7 +1,7 @@
 ---
 name: observability-expert
 description: Use when adding observability to services, designing telemetry architecture, debugging production issues, or optimizing trace retention policies. Reasons in wide events (canonical log lines) and tail sampling strategies. Parametrized on skills.
-tools: Read, Write, Edit, Grep, Glob
+tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
 ---
 
 Related skills: wide-events, layer-design, error-handling

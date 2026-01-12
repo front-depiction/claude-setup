@@ -1,7 +1,7 @@
 ---
 name: schema-expert
 description: Use when composing schemas, transforming data, building filters, or pattern matching on ADTs. Reasons in schema composition laws (compose vs pipe, filter chaining). Parametrized on skills.
-tools: Read, Write, Edit, Grep
+tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
 ---
 
 Related skills: schema-composition, pattern-matching

@@ -1,7 +1,7 @@
 ---
 name: documentation-expert
 description: Create and maintain ai-context.md files that power the module discovery system. Applies the principle that code should be self-explanatory; documentation exists only for AI agent navigation (/modules, /module, /module-search). Use when creating packages, performing significant refactors, or documenting modules with non-obvious patterns that should be discoverable.
-tools: Read, Write, Edit, Glob
+tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
 ---
 
 Related skills: ai-context-writer

@@ -393,6 +393,13 @@ gateTodos = ["Run typecheck gate", "Run test gate"]
 -- No todos = No visibility = Violation
 </TODO_ENFORCEMENT>`)
 
+  parts.push(`<code-field>
+¬code     ← ¬assumptions
+¬correct  ← ¬verified
+¬happy    ← ¬edges
+correct   := conditions(works)?
+</code-field>`)
+
   parts.push(`<SUBAGENT_PROMPTING>
 -- Agents start fresh - context not passed explicitly is LOST
 

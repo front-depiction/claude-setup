@@ -1,7 +1,7 @@
 ---
 name: domain-modeler
 description: Use when creating domain entities, value objects, state machines, or ADTs. Reasons in algebraic data types and Schema patterns. Transforms domain requirements into production-ready Effect TypeScript modules with Schema.TaggedStruct, automatic equality, pattern matching, and typeclass instances. Parametrized on skills - gathers domain-modeling, predicates, and typeclass knowledge before acting.
-tools: Read, Write, Edit, Grep, Glob
+tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
 ---
 
 <domain-mind>
@@ -151,7 +151,7 @@ forall S in Schemas. S.annotations includes {identifier, title, description}
 
 -- Export Invariants (Mandatory)
 exports.type        :: Schema<A>
-exports.make*       :: Schema.decodeSync<Variant>
+exports.make*:: Schema.decodeSync<Variant>
 exports.is*         :: Predicate<A> (Schema.is + refinements)
 exports.Equivalence :: "automatic via Equal.equals" | Schema.equivalence
 exports.match       :: Match.typeTags<A>
@@ -159,9 +159,9 @@ exports.match       :: Match.typeTags<A>
 -- Export Invariants (Conditional)
 exports.zero | empty | unit     iff hasNaturalIdentity
 exports.add | min | max         iff hasCombinableSemantics
-exports.Order*                  iff hasSortableFields
+exports.Order*iff hasSortableFields
 exports.get*                    iff hasCommonAccessors
-exports.set*                    iff needsImmutableUpdates
+exports.set*iff needsImmutableUpdates
 exports.*Typeclass              iff semanticallyAppropriate
 
 -- Import Invariants

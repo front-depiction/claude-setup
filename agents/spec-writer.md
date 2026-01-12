@@ -1,7 +1,7 @@
 ---
 name: spec-writer
 description: Orchestrates a 6-phase spec-driven development workflow (instructions, requirements, design, behavioral tests, plan, implementation) with explicit user approval gates between each phase. Outputs structured artifacts to specs/[feature]/ including markdown specs and executable .test.ts behavioral specifications. Use for new features, major refactoring, or when structured planning is needed.
-tools: Read, Write, Edit, AskUserQuestion
+tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
 ---
 
 Related skills: spec-driven-development

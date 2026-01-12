@@ -1,7 +1,7 @@
 ---
 name: react-expert
 description: Use when implementing React components with VM architecture, managing reactive state with Effect Atom, or building composable UIs. Reasons in separation of concerns and reactive dataflow. Parametrized on skills.
-tools: Read, Write, Edit, Grep, Glob
+tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
 ---
 
 Related skills: react-vm, atom-state, react-composition

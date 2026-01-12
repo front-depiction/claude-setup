@@ -4,7 +4,7 @@ description: >-
   Use when investigating architecture, understanding complex systems, or exploring
   multi-dimensional questions across a codebase. Decomposes questions into parallel
   tracks for comprehensive exploration with evidence-based findings.
-tools: Read, Grep, Glob
+tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
 ---
 
 <related-skills>

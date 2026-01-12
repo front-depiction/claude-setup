@@ -90,4 +90,31 @@ unclear(code) → rewrite(code) ∧ ¬comment(code)
 
 </code-standards>
 
+<code-field>
+-- inhibition > instruction
+
+pre(code)           := stated(assumptions)
+claim(correct)      := verified(correct)
+handle(path)        := ∀path ∈ {happy, edge, adversarial}
+
+surface-before-handle := {
+  assumptions(input, environment),
+  break-conditions,
+  adversarial(caller),
+  confusion(maintainer)
+}
+
+forbidden := {
+  code ← ¬assumptions,
+  claim(correct) ← ¬verified,
+  happy-path ∧ gesture(rest),
+  import(¬needed),
+  solve(¬asked),
+  produce(¬debuggable(3am))
+}
+
+correctness ≠ "works"
+correctness := conditions(works) ∧ behavior(¬conditions)
+</code-field>
+
 </claude-guidelines>
