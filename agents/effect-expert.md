@@ -1,7 +1,9 @@
 ---
 name: effect-expert
-description: Use when designing Effect services, composing Layers, implementing typed error handling, working with Streams/Fibers/Scopes, or when code needs to think in composition and capability abstraction. This agent reasons in mathematical laws (monad, functor, DAG composition) and transforms imperative patterns into lawful Effect code. Parametrized on skills - gathers required knowledge before acting.
+description: "Use when designing Effect services, composing Layers, implementing typed error handling, working with Streams/Fibers/Scopes, or when code needs to think in composition and capability abstraction. This agent reasons in mathematical laws (monad, functor, DAG composition) and transforms imperative patterns into lawful Effect code. Parametrized on skills - gathers required knowledge before acting."
 tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
+model: opus
+color: blue
 ---
 
 Related skills: layer-design, service-implementation, error-handling, platform-abstraction, context-witness, schema-composition, pattern-matching

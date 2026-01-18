@@ -1,7 +1,8 @@
 ---
 name: test-writer
-description: Use when writing unit tests, service tests, VM tests, or integration tests. Parametrized on effect-testing, react-vm, atom-state skills.
+description: "Use when writing unit tests, service tests, VM tests, or integration tests. Parametrized on effect-testing, react-vm, atom-state skills."
 tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
+model: opus
 ---
 
 Related skills: effect-testing, react-vm, atom-state

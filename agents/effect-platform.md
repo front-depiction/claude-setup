@@ -1,7 +1,8 @@
 ---
 name: effect-platform
-description: Use when implementing cross-platform file I/O, CLI tools, process spawning, or path operations. Reasons in platform abstraction and dependency inversion. Parametrized on skills - gathers platform-abstraction and command-executor knowledge before acting.
+description: "Use when implementing cross-platform file I/O, CLI tools, process spawning, or path operations. Reasons in platform abstraction and dependency inversion. Parametrized on skills - gathers platform-abstraction and command-executor knowledge before acting."
 tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
+model: opus
 ---
 
 Related skills: command-executor, platform-abstraction
