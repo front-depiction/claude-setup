@@ -597,7 +597,7 @@ P1 ; P2 ; P3 (sequential phases, parallel tasks within each)
 - T1.3: `FeatureService.ts` — service interface + Tag
 - T1.4: `FeatureRepository.ts` — repository interface + Tag
 
-Gate: typechecks pass
+Gate: typechecks pass (DELEGATE to agent)
 
 ## Phase 2: Implementations {T2.1 || T2.2 || T2.3}
 
@@ -605,7 +605,7 @@ Gate: typechecks pass
 - T2.2: `FeatureServiceLive.ts` — implements FeatureService
 - T2.3: `FeatureValidation.ts` — validation functions
 
-Gate: typechecks pass
+Gate: typechecks pass (DELEGATE to agent)
 
 ## Phase 3: Tests {T3.1 || T3.2 || T3.3}
 
@@ -613,7 +613,7 @@ Gate: typechecks pass
 - T3.2: `FeatureService.test.ts`
 - T3.3: `FeatureValidation.test.ts`
 
-Gate: tests pass
+Gate: tests pass (DELEGATE to agent)
 ```
 
 **After completion**:
@@ -637,7 +637,9 @@ Gate: tests pass
 3. After each phase: run tests
 4. Update plan.md progress markers
 
-**Quality gates**: typechecks pass after each file, tests pass after each phase
+**Quality gates**: Gates (typecheck, test) SHALL be delegated to agents — do not run directly from orchestrating agent.
+
+**Legal review**: For significant changes (multiple files, architectural impact), perform `/legal-review` before finalizing implementation.
 
 **After completion**:
 1. Present implementation summary

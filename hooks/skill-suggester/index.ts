@@ -341,7 +341,7 @@ ALLOWED:
 - Task (spawn agents) ← YOUR PRIMARY TOOL
 - AskUserQuestion ← clarify with human
 - TodoWrite ← track delegated work
-- Bash ← ONLY for gates (typecheck/test)
+- Bash ← gates (typecheck/test) - DELEGATE from orchestrators, run from implementation agents
 </FORBIDDEN_TOOLS>`)
 
   // Fix loop detection
@@ -366,10 +366,10 @@ minimum_agents :: NonTrivialTask → Int
 minimum_agents _ = 3  -- If fewer, decompose more
 </DELEGATION_RULES>`)
 
-  // Gates (the ONE thing you run directly)
+  // Gates (delegation rules)
   parts.push(`<GATES>
--- Gates are the ONLY direct execution allowed
--- Run via Bash after agents complete work
+-- Implementation agents: run gates directly via Bash
+-- Orchestrating agents: DELEGATE gates to implementation agents
 
 typecheck :: Scope → Effect Result
 typecheck scope = Bash "mise run typecheck:pkg"
@@ -378,6 +378,8 @@ test :: Package → Effect Result
 test pkg = Bash "mise run test:pkg"
 
 -- Report success ONLY when both pass
+-- For significant changes (multiple files, architectural impact):
+-- Invoke /legal-review before finalizing
 </GATES>`)
 
   parts.push(`<TODO_ENFORCEMENT>

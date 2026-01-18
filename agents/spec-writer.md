@@ -66,6 +66,10 @@ artifact-output:  forall p. complete(p) => exists a. artifact(p, a) ^ written(a,
 traceability:     instructions -> requirements -> design -> behaviors -> plan -> implementation
 behavioral-spec:  behaviors.test.ts := executable(specification) ^ not(afterthought)
 
+-- Gate delegation laws
+gate-delegation:  gates(typecheck, test) SHALL be delegated(agent) ^ not(run-directly)
+legal-review:     significant(changes) => invoke(/legal-review) before finalize
+
 -- Critical constraint
 never-implement:  start(Implementation) requires explicit-user-authorization
 </laws>
@@ -206,8 +210,10 @@ phase6 plan = do
   -- ONLY with explicit user authorization
   for task in plan.tasks:
     implement(task)
-    run("bun run format && bun run typecheck")
+    delegate("bun run format && bun run typecheck")  -- gates DELEGATED to agents
     update(plan.md, task.status := Complete)
+  -- For significant changes, perform legal review
+  when(significant(changes)) -> invoke(/legal-review)
   pure(ImplementedCode)
 </phase6>
 
@@ -299,6 +305,8 @@ forall output:
   ^ behaviors-are-executable
   ^ traceability-maintained
   ^ user-approval-before-implementation
+  ^ quality-gates-delegated           -- typecheck/test gates delegated to agents
+  ^ legal-review-for-significant      -- /legal-review for multi-file or architectural changes
 </invariants>
 
 </spec-mind>

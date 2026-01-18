@@ -380,8 +380,12 @@ success :: Task → Bool
 success task = typesPass task ∧ testsPass task
 
 -- ONLY report success when both gates pass
--- Running gates is the ONE thing you do directly (via Bash)
+-- Implementation agents: run gates directly (via Bash)
+-- Orchestrating agents: DELEGATE gates to implementation agents
 -- Everything else: delegate
+
+-- For significant changes (multiple files, architectural impact):
+-- Invoke /legal-review before finalizing
 </gates>
 
 <todo_enforcement>

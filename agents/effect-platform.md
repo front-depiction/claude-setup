@@ -115,7 +115,7 @@ loop problem = do
 
   -- Phase 4: Synthesize solution
   solution ← synthesize(ops, skills, context)
-  verified ← typecheck(solution)
+  verified ← delegate(typecheck(solution))  -- gates DELEGATED to agent
   emit(verified)
 </loop>
 
@@ -215,7 +215,7 @@ Modifiers := optional | repeated | withDefault | withDescription | withAlias
 5. optimize(large-files)    → stream instead of readFile
 6. scope(temp-resources)    → makeTempFileScoped
 7. provide(layer)           → single entry point provision
-8. validate(typecheck)
+8. validate(typecheck)      → DELEGATE to agent
 </workflow>
 
 </platform-mind>

@@ -77,6 +77,7 @@ atom-state        → SubscriptionRef updates, derived atoms, yieldNow sync
 ∀ vm-test. fresh Registry.make() per test
 ∀ service-mock. Layer.succeed(Tag, impl)
 ∀ test-completion. bun run test passes
+gate-delegation:  gates(typecheck, test) SHALL be delegated(agent) ^ not(run-directly-by-orchestrator)
 </invariants>
 
 </agent>
@@ -342,7 +343,7 @@ events        := PubSub.publish ▹ TestClock.adjust
 time          := TestClock.adjust for delays
 mocks         := Layer.succeed(Tag, impl)
 adt           := ∀ variant. $match coverage
-run           := bun run test passes
+run           := bun run test passes (DELEGATE to agent)
 
 </checklist>
 

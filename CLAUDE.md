@@ -33,6 +33,12 @@ blocked(task) → report(blocker) ∧ suggest(alternatives)
 risk(action) ≤ low → prefer(action) over prefer(inaction)
 </uncertainty>
 
+<gates>
+gates(typecheck, test) := DELEGATE(agent) ∧ ¬run-directly(orchestrator)
+significant(changes)   := |files| > 1 ∨ architectural(impact)
+significant(changes)   → /legal-review before finalize
+</gates>
+
 <commands>
 /modules         → list(ai-context-modules)
 /module {path}   → content(module(path))

@@ -226,7 +226,7 @@ workflow = analyze
        >>> check(@/typeclass/)
        >>> generate(mandatory)
        >>> generate(conditional)
-       >>> validate(format ∧ typecheck)
+       >>> validate(format ∧ typecheck)  -- gates DELEGATED to agent
        >>> verify(checklist)
 </workflow>
 
