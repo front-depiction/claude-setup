@@ -1,7 +1,6 @@
 ---
 name: legal-review
 description: Orchestrate lawyer agents to review code for compliance with codebase laws. Spawns counsel in parallel to produce a unified legal brief.
-context: fork
 ---
 
 # Legal Review
@@ -65,6 +64,7 @@ git log --since="midnight" --name-only --format="" | sort -u
 **Search Resolution Examples:**
 
 When the user says "the chat component":
+
 ```bash
 # Try multiple patterns to find relevant files
 glob "**/chat*.ts" "**/Chat*.tsx" "**/chat/**"
@@ -72,17 +72,20 @@ grep -l "Chat" --include="*.ts" --include="*.tsx"
 ```
 
 When the user says "all VM files in the UI app":
+
 ```bash
 glob "apps/ui/**/*.vm.ts"
 ```
 
 When the user says "the sidebar and navigation components":
+
 ```bash
 glob "**/sidebar*.ts" "**/Sidebar*.tsx" "**/navigation*.ts" "**/Navigation*.tsx"
 glob "**/nav*.ts" "**/Nav*.tsx"
 ```
 
 When the user says "the user authentication flow":
+
 ```bash
 grep -l "auth" "login" "session" --include="*.ts" --include="*.tsx"
 glob "**/auth/**" "**/login/**" "**/session/**"
@@ -135,6 +138,7 @@ $APPLICABLE_LAWS
 **Your authority:** You are the `/lawyer` agent. Load relevant law skills for the full specifications.
 
 **Procedure:**
+
 1. Determine which laws apply to each file based on patterns
 2. Load each applicable law skill (e.g., `/the-vm-standard` for *.vm.ts files)
 3. Read each file completely
@@ -143,6 +147,7 @@ $APPLICABLE_LAWS
 
 **Required output format:**
 For each file, produce a verdict with:
+
 - File path
 - Applicable laws
 - Compliance status (COMPLIANT | VIOLATION | ADVISORY)

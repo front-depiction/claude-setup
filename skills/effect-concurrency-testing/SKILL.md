@@ -14,6 +14,7 @@ This skill provides patterns for testing Effect's concurrency primitives: fibers
 | Need | Use |
 |------|-----|
 | Simple fiber yield | `Effect.yieldNow` |
+| Forked PubSub subscriber ready | `yieldNow` after fork, `yieldNow` after each publish |
 | Wait for subscriber ready | `Deferred.make()` + `Deferred.await` |
 | Wait for stream element | `Effect.makeLatch()` + `Stream.tap(() => latch.open)` |
 | Time-dependent behavior | `TestClock.adjust` |
@@ -246,6 +247,152 @@ it.effect("concurrent publishers and subscribers", () =>
 
     const result = yield* Fiber.join(subscriber)
     expect(result).toEqual(values)
+  })
+)
+```
+
+## Forked Fiber PubSub Subscriptions
+
+When testing forked fibers that subscribe to a PubSub, proper yield ordering is critical to avoid losing events.
+
+### Correct Order: yieldNow After Subscribe, Then After Each Publish
+
+```typescript
+import { it, expect } from "@effect/vitest"
+import { Effect, PubSub, Ref, Array as A } from "effect"
+
+it.effect("forked subscriber receives all events", () =>
+  Effect.gen(function* () {
+    const pubsub = yield* PubSub.unbounded<string>()
+    const received = yield* Ref.make<string[]>([])
+
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        const sub = yield* PubSub.subscribe(pubsub)
+
+        yield* Effect.fork(
+          Effect.forever(
+            Effect.gen(function* () {
+              const msg = yield* PubSub.take(sub)
+              yield* Ref.update(received, A.append(msg))
+            })
+          )
+        )
+
+        yield* Effect.yieldNow()  // Let forked fiber start and become ready
+
+        yield* PubSub.publish(pubsub, "event-1")
+        yield* Effect.yieldNow()  // Let fiber process event-1
+
+        yield* PubSub.publish(pubsub, "event-2")
+        yield* Effect.yieldNow()  // Let fiber process event-2
+
+        const events = yield* Ref.get(received)
+        expect(events).toEqual(["event-1", "event-2"])
+      })
+    )
+  })
+)
+```
+
+### Why This Order Matters
+
+The fiber scheduling model requires explicit yields at specific points:
+
+1. **yieldNow after subscribe/fork**: The forked fiber needs a chance to execute its first instruction (the `PubSub.take`) before any events are published. Without this yield, the fiber hasn't started yet.
+
+2. **yieldNow after each publish**: After publishing, the subscriber fiber needs a turn to process the event. Without yielding, you may publish multiple events before the fiber processes any.
+
+### Common Mistake: Events Lost
+
+```typescript
+import { Effect, PubSub, Ref } from "effect"
+
+// BAD - Events are lost because fiber hasn't started
+Effect.gen(function* () {
+  const pubsub = yield* PubSub.unbounded<string>()
+  const received = yield* Ref.make<string[]>([])
+
+  yield* Effect.scoped(
+    Effect.gen(function* () {
+      const sub = yield* PubSub.subscribe(pubsub)
+
+      yield* Effect.fork(/* subscriber logic */)
+
+      // WRONG: Publishing immediately - fiber not ready yet!
+      yield* PubSub.publish(pubsub, "event-1")
+      yield* PubSub.publish(pubsub, "event-2")
+
+      yield* Effect.yieldNow()  // Too late - events already missed
+
+      const events = yield* Ref.get(received)
+      // events may be [] or incomplete!
+    })
+  )
+})
+```
+
+### Single yieldNow Is Sufficient
+
+Unlike `sleep(0)` patterns in other runtimes, Effect's `yieldNow` is deterministic within the fiber scheduler. A single `yieldNow` is sufficient at each synchronization point - no need for multiple yields or retry loops.
+
+```typescript
+import { Effect, PubSub } from "effect"
+
+// GOOD - Single yield at each point
+yield* Effect.fork(subscriber)
+yield* Effect.yieldNow()  // One yield is enough
+
+yield* PubSub.publish(pubsub, "event")
+yield* Effect.yieldNow()  // One yield is enough
+
+// BAD - Unnecessary multiple yields
+yield* Effect.fork(subscriber)
+yield* Effect.yieldNow()
+yield* Effect.yieldNow()  // Redundant
+yield* Effect.yieldNow()  // Redundant
+```
+
+### Testing Observer Pattern with Session
+
+This pattern applies to any forked subscriber, including observer patterns:
+
+```typescript
+import { it, expect } from "@effect/vitest"
+import { Effect } from "effect"
+
+declare const Observer: {
+  attach: (
+    session: unknown,
+    observer: unknown,
+    args: unknown
+  ) => Effect.Effect<void>
+}
+
+declare const Session: {
+  publish: (session: unknown, event: unknown) => Effect.Effect<void>
+}
+
+declare const session: unknown
+declare const observer: unknown
+declare const args: unknown
+declare const event1: unknown
+declare const event2: unknown
+declare const getResults: () => Effect.Effect<unknown[]>
+
+it.effect("observer receives session events", () =>
+  Effect.gen(function* () {
+    yield* Observer.attach(session, observer, args)  // Forks subscriber
+    yield* Effect.yieldNow()                         // Let fiber start
+
+    yield* Session.publish(session, event1)
+    yield* Effect.yieldNow()                         // Let event process
+
+    yield* Session.publish(session, event2)
+    yield* Effect.yieldNow()                         // Let event process
+
+    const results = yield* getResults()
+    expect(results).toHaveLength(2)
   })
 )
 ```
@@ -600,6 +747,8 @@ Effect.gen(function* () {
 - [ ] Using correct coordination primitive for the use case
 - [ ] `Effect.scoped` wraps PubSub subscriptions
 - [ ] Latches ensure stream subscriptions are ready before mutations
+- [ ] `Effect.yieldNow` after fork to let subscriber fiber start
+- [ ] `Effect.yieldNow` after each publish to let fiber process event
 - [ ] `Effect.yieldNow` used instead of TestClock for non-time-dependent code
 - [ ] Fiber interruption tested with `Exit.isInterrupted` or `Cause.isInterruptedOnly`
 - [ ] Stream finalizers verified with `Stream.ensuring`
