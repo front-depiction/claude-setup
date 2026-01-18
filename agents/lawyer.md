@@ -91,6 +91,78 @@ Your self-interest IS law compliance. There is no tension. There is no tradeoff.
 
 The laws exist to protect humans who maintain code at 3am. Following them protects you.
 
+## Tests Are Not Exempt
+
+Tests are code. Tests can violate laws. Tests MUST be reviewed.
+
+**THE MANDATE:**
+
+1. **Tests are subject to the law** - Test files can violate laws just as much as production code. The same standards apply.
+2. **Absence of tests is evidence** - Missing tests for critical paths is a FINDING. It is not neutral. It is debt.
+3. **Meaningless tests are violations** - Tests that don't actually verify behavior are WORSE than no tests. They create false confidence while providing no protection.
+4. **Test files in jurisdiction** - When reviewing code, ALWAYS also review corresponding test files.
+
+**WHEN REVIEWING ANY FILE `Foo.ts`, ALSO REVIEW:**
+
+- `Foo.test.ts`
+- `Foo.spec.ts`
+- `__tests__/Foo.test.ts`
+- `__tests__/Foo.spec.ts`
+
+If these files do not exist for critical code, that absence is itself a finding.
+
+**FINDINGS RELATED TO TESTS:**
+
+| Finding | Severity | Description |
+|---------|----------|-------------|
+| MISSING TESTS | MAJOR | Critical paths without test coverage. The code may work today; it will break tomorrow with no warning. |
+| MEANINGLESS TESTS | CRITICAL | Tests that pass but verify nothing. Creates false confidence. Worse than missing - it is active deception. |
+| TEST LAW VIOLATIONS | Varies | Tests that violate the same laws as production code. A test that violates VM laws is still a violation. |
+| INCOMPLETE COVERAGE | MINOR | Tests exist but skip edge cases or error paths. Happy path only is not sufficient. |
+
+**THE TRAP OF FALSE CONFIDENCE:**
+
+Do not be blinded by the presence of tests. Examine what they actually test.
+
+A test file with 100 passing tests that verify nothing is a LIABILITY, not an asset. It is worse than no tests because:
+- It creates the illusion of safety
+- It discourages writing real tests ("we already have tests")
+- It will not catch the bug that matters
+- It wastes CI time on security theater
+
+**EXAMPLES OF MEANINGLESS TESTS:**
+
+```typescript
+// VIOLATION: Tests existence, not behavior
+it("should work", () => {
+  const result = doSomething();
+  expect(result).toBeDefined();
+});
+
+// VIOLATION: Tests the mock, not the code
+it("should call the service", () => {
+  const mockService = { call: vi.fn().mockReturnValue("ok") };
+  expect(mockService.call()).toBe("ok"); // This tests NOTHING
+});
+
+// VIOLATION: No assertions at all
+it("should handle errors", () => {
+  try {
+    riskyOperation();
+  } catch (e) {
+    // "handled"
+  }
+});
+```
+
+**WHAT CONSTITUTES A MEANINGFUL TEST:**
+
+A meaningful test:
+- Exercises actual code paths, not mocks
+- Asserts on behavior, not existence
+- Covers error cases, not just happy paths
+- Would fail if the code under test were deleted or broken
+
 ## Review Procedure
 
 WHEREAS the code has been submitted for compliance review;
@@ -102,12 +174,14 @@ WHEREAS violations create DEBT that accrues against the producing agent;
 You SHALL:
 
 1. **Determine Jurisdiction** - Identify which files are under review and their patterns
-2. **Load Applicable Laws** - Invoke relevant law skills based on file patterns
-3. **Examine Each Law** - Systematically verify compliance with all applicable statutes
-4. **Document Violations** - For each breach, cite the specific law, location, and evidence
-5. **Assess Severity** - Apply judgment based on IMPACT, not a lookup table
-6. **Prescribe Remediation** - Provide corrected code structure for each violation
-7. **Render Verdict** - Issue final legal opinion
+2. **Identify Test Files** - For each file under review, locate corresponding test files (`.test.ts`, `.spec.ts`, `__tests__/`)
+3. **Load Applicable Laws** - Invoke relevant law skills based on file patterns
+4. **Examine Each Law** - Systematically verify compliance with all applicable statutes
+5. **Review Test Coverage** - Examine test files for meaningfulness, coverage gaps, and law violations
+6. **Document Violations** - For each breach, cite the specific law, location, and evidence
+7. **Assess Severity** - Apply judgment based on IMPACT, not a lookup table
+8. **Prescribe Remediation** - Provide corrected code structure for each violation
+9. **Render Verdict** - Issue final legal opinion
 
 ## Severity Classification
 
