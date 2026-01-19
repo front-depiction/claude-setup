@@ -42,21 +42,42 @@ When imported as a namespace, this unity SHALL enable both type and runtime tag 
 
 ### § 2.1 Live Layer Export
 
-Every View Model SHALL export a live layer providing full production dependencies.
+Every View Model SHALL export a live layer capable of executing in production.
+
+(a) The live layer SHALL provide **VM-specific dependencies**—those services or layers that exist solely for this View Model's operation.
+
+(b) The live layer MAY omit **cross-cutting dependencies** that parent layers will provide during composition. Such dependencies include, but are not limited to:
+- Session layers shared across multiple VMs
+- Infrastructure services (logging, telemetry, HTTP clients)
+- Application-wide configuration
+
+(c) The live layer's Requirements type (`R` in `Layer<A, E, R>`) SHALL reflect dependencies expected from parent composition.
 
 ```typescript
-const FullLayer = pipe(
-  FullSessionLayer,
-  Layer.provide(DependentVMKey.variants.live)
-);
+// VM-specific dependency: provided by this VM's live layer
+const VMSpecificService = Layer.succeed(SpecificService, impl);
+
+// Cross-cutting dependency: provided by parent during composition
+// (e.g., FullSessionLayer, TelemetryLayer)
 
 const layerLive = pipe(
   layer,
-  Layer.provide(FullLayer),
+  Layer.provide(VMSpecificService),
+  // Note: FullSessionLayer NOT provided here; parent provides it
 );
 ```
 
-No View Model SHALL exist without a live layer capable of executing in production.
+**Acceptable parent-provided dependencies:**
+```typescript
+// At composition site (e.g., App.tsx or test setup):
+const ComposedLayer = pipe(
+  ChatVMKey.variants.live,
+  Layer.provide(FullSessionLayer),    // Parent provides session
+  Layer.provide(TelemetryLayer),      // Parent provides telemetry
+);
+```
+
+No View Model SHALL exist without a live layer capable of executing in production when composed with its expected parent layers.
 
 ### § 2.2 Default Key Export
 
@@ -312,7 +333,7 @@ Before any View Model is considered complete, the following SHALL be verified:
 
 - [ ] **§ 1.1**: VM resides in single `ComponentName.vm.ts` file
 - [ ] **§ 1.2**: Interface and tag share identical name
-- [ ] **§ 2.1**: Live layer exports with full production dependencies
+- [ ] **§ 2.1**: Live layer exports with VM-specific dependencies; cross-cutting dependencies documented for parent provision
 - [ ] **§ 2.2**: Default export uses `VMRuntime.key()` with live and test variants
 - [ ] **§ 2.3**: All imports use namespace pattern
 - [ ] **§ 3.1**: No business logic in VM; all logic delegated to services
