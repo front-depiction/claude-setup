@@ -270,17 +270,33 @@ export const extractLayersFromContent = (
   })
 }
 
-export const findTypeScriptFiles = Effect.gen(function* () {
+export const findTypeScriptFiles = (srcPath: string) => Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
 
-  const srcPath = path.resolve("./src")
+  const resolvedPath = path.resolve(srcPath)
+
+  const srcExists = yield* pipe(
+    fs.exists(resolvedPath),
+    Effect.orElseSucceed(() => false)
+  )
+
+  if (!srcExists) {
+    return []
+  }
 
   const scanDir = (
     dir: string
   ): Effect.Effect<ReadonlyArray<string>, PlatformError.PlatformError, FileSystem.FileSystem | Path.Path> =>
     Effect.gen(function* () {
-      const entries = yield* fs.readDirectory(dir)
+      const entries = yield* pipe(
+        fs.readDirectory(dir),
+        Effect.catchTag("SystemError", (error) =>
+          error.reason === "NotFound"
+            ? Effect.succeed([])
+            : Effect.fail(error)
+        )
+      )
 
       const processEntry = (entry: string) =>
         Effect.gen(function* () {
@@ -305,7 +321,7 @@ export const findTypeScriptFiles = Effect.gen(function* () {
       return Array.flatten(results)
     })
 
-  return yield* scanDir(srcPath)
+  return yield* scanDir(resolvedPath)
 })
 
 export const findServiceDefinitions = (
@@ -342,8 +358,15 @@ export const findLayerDefinitions = (
     return Array.flatten(results)
   })
 
-export const buildArchitectureGraph = Effect.gen(function* () {
-  const files = yield* findTypeScriptFiles
+export const buildArchitectureGraph = (srcPath: string) => Effect.gen(function* () {
+  const files = yield* findTypeScriptFiles(srcPath)
+
+  if (files.length === 0) {
+    yield* Console.log(`No TypeScript files found in ${srcPath} directory`)
+    yield* Console.log("The architecture analyzer expects services and layers in the specified directory")
+    yield* Console.log("Returning empty graph...")
+  }
+
   const services = yield* findServiceDefinitions(files)
   const layers = yield* findLayerDefinitions(files)
 
@@ -2179,7 +2202,7 @@ const analyzeArchitecture = Command.make(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem
 
-      const graph = yield* buildArchitectureGraph
+      const graph = yield* buildArchitectureGraph("./src")
 
       const content =
         format === "mermaid"

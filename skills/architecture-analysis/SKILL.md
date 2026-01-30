@@ -20,6 +20,23 @@ This skill provides comprehensive architectural analysis capabilities using grap
 
 All analysis is performed via the architecture CLI tool located at `./.claude/bin/architecture`.
 
+### Path Specification
+
+All commands accept an optional directory argument to specify where to search for TypeScript files:
+
+```bash
+# Default (searches ./src)
+architecture analyze
+
+# Custom directory
+architecture analyze apps/ui/src
+
+# Current directory
+architecture analyze .
+```
+
+The default is `./src`. If the specified directory doesn't exist or contains no TypeScript files, the tool will gracefully return an empty graph with an informative message.
+
 ### Progressive Disclosure Pattern
 
 The CLI uses progressive disclosure. Run once to discover everything:

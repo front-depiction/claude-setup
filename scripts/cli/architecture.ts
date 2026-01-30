@@ -1,4 +1,7 @@
 #!/usr/bin/env bun
+import * as Args from "@effect/cli/Args"
+import * as CliApp from "@effect/cli/CliApp"
+import * as Command from "@effect/cli/Command"
 import * as PlatformError from "@effect/platform/Error"
 import * as FileSystem from "@effect/platform/FileSystem"
 import * as Path from "@effect/platform/Path"
@@ -273,11 +276,20 @@ const extractLayersFromContent = (
   })
 }
 
-const findTypeScriptFiles = Effect.gen(function* () {
+const findTypeScriptFiles = (directory: string) => Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
 
-  const srcPath = path.resolve("./src")
+  const srcPath = path.resolve(directory)
+
+  const srcExists = yield* pipe(
+    fs.exists(srcPath),
+    Effect.orElseSucceed(() => false)
+  )
+
+  if (!srcExists) {
+    return []
+  }
 
   const scanDir = (
     dir: string
@@ -345,8 +357,8 @@ const findLayerDefinitions = (
     return Array.flatten(results)
   })
 
-const buildArchitectureGraph = Effect.gen(function* () {
-  const files = yield* findTypeScriptFiles
+const buildArchitectureGraph = (directory: string) => Effect.gen(function* () {
+  const files = yield* findTypeScriptFiles(directory)
   const services = yield* findServiceDefinitions(files)
   const layers = yield* findLayerDefinitions(files)
 
@@ -1009,22 +1021,27 @@ const helpText = `
 Architecture Analysis CLI
 
 USAGE:
-  bun run architecture <command> [options]
+  bun run architecture <command> [directory] [options]
 
 COMMANDS:
-  analyze                          Full dependency graph analysis
-  blast-radius <service>           Show blast radius (upstream/downstream) for a service
+  analyze [directory]              Full dependency graph analysis (default directory: ./src)
+  blast-radius <service> [dir]     Show blast radius (upstream/downstream) for a service
   common-ancestors <svc1> <svc2>   Find shared dependencies across services
-  metrics                          Show graph metrics only
-  domains                          Show domain discovery via cut vertices
-  hot-services                     Show services with ≥4 dependents
+  metrics [directory]              Show graph metrics only
+  domains [directory]              Show domain discovery via cut vertices
+  hot-services [directory]         Show services with ≥4 dependents
   help                             Show this help
+
+ARGUMENTS:
+  directory                        Optional directory to analyze (defaults to ./src)
 
 OUTPUT:
   All commands output XML to stdout for agent consumption
 
 EXAMPLES:
   bun run architecture analyze
+  bun run architecture analyze ./apps/ui/src
+  bun run architecture analyze .
   bun run architecture blast-radius TodoQueryService
   bun run architecture common-ancestors SidebarVM DetailPanelVM
 `
@@ -1038,35 +1055,58 @@ const main = Effect.gen(function* () {
     return
   }
 
-  const graph = yield* buildArchitectureGraph
+  let directory = "./src"
+
+  const graph = yield* buildArchitectureGraph(directory)
   const analysisGraph = buildAnalysisGraph(graph)
 
   switch (command) {
-    case "analyze":
-      yield* Console.log(formatAgent(graph))
+    case "analyze": {
+      if (args[1]) {
+        directory = args[1]
+        const customGraph = yield* buildArchitectureGraph(directory)
+        yield* Console.log(formatAgent(customGraph))
+      } else {
+        yield* Console.log(formatAgent(graph))
+      }
       break
+    }
 
     case "blast-radius": {
       const service = args[1]
       if (!service) {
-        yield* Console.error("Usage: architecture blast-radius <service>")
+        yield* Console.error("Usage: architecture blast-radius <service> [directory]")
         yield* Effect.fail(new Error("Missing service"))
       }
-      const result = computeBlastRadius(analysisGraph, service)
-      yield* pipe(
-        result,
-        Option.match({
-          onNone: () => Console.error(`Service not found: ${service}`),
-          onSome: (r) => Console.log(renderBlastRadius(r))
-        })
-      )
+      if (args[2]) {
+        directory = args[2]
+        const customGraph = yield* buildArchitectureGraph(directory)
+        const customAnalysisGraph = buildAnalysisGraph(customGraph)
+        const result = computeBlastRadius(customAnalysisGraph, service)
+        yield* pipe(
+          result,
+          Option.match({
+            onNone: () => Console.error(`Service not found: ${service}`),
+            onSome: (r) => Console.log(renderBlastRadius(r))
+          })
+        )
+      } else {
+        const result = computeBlastRadius(analysisGraph, service)
+        yield* pipe(
+          result,
+          Option.match({
+            onNone: () => Console.error(`Service not found: ${service}`),
+            onSome: (r) => Console.log(renderBlastRadius(r))
+          })
+        )
+      }
       break
     }
 
     case "common-ancestors": {
       const services = args.slice(1)
       if (services.length < 2) {
-        yield* Console.error("Usage: architecture common-ancestors <service1> <service2> ...")
+        yield* Console.error("Usage: architecture common-ancestors <service1> <service2> ... [directory]")
         yield* Effect.fail(new Error("Need at least 2 services"))
       }
       const result = computeCommonAncestors(analysisGraph, services)
@@ -1075,23 +1115,47 @@ const main = Effect.gen(function* () {
     }
 
     case "metrics": {
-      const fullOutput = formatAgent(graph)
-      const metricsMatch = fullOutput.match(/<metrics>[\s\S]*?<\/metrics>/)
-      yield* Console.log(metricsMatch?.[0] ?? "<metrics />")
+      if (args[1]) {
+        directory = args[1]
+        const customGraph = yield* buildArchitectureGraph(directory)
+        const fullOutput = formatAgent(customGraph)
+        const metricsMatch = fullOutput.match(/<metrics>[\s\S]*?<\/metrics>/)
+        yield* Console.log(metricsMatch?.[0] ?? "<metrics />")
+      } else {
+        const fullOutput = formatAgent(graph)
+        const metricsMatch = fullOutput.match(/<metrics>[\s\S]*?<\/metrics>/)
+        yield* Console.log(metricsMatch?.[0] ?? "<metrics />")
+      }
       break
     }
 
     case "domains": {
-      const fullOutput = formatAgent(graph)
-      const domainsMatch = fullOutput.match(/<domains[\s\S]*?<\/domains>/)
-      yield* Console.log(domainsMatch?.[0] ?? "<domains />")
+      if (args[1]) {
+        directory = args[1]
+        const customGraph = yield* buildArchitectureGraph(directory)
+        const fullOutput = formatAgent(customGraph)
+        const domainsMatch = fullOutput.match(/<domains[\s\S]*?<\/domains>/)
+        yield* Console.log(domainsMatch?.[0] ?? "<domains />")
+      } else {
+        const fullOutput = formatAgent(graph)
+        const domainsMatch = fullOutput.match(/<domains[\s\S]*?<\/domains>/)
+        yield* Console.log(domainsMatch?.[0] ?? "<domains />")
+      }
       break
     }
 
     case "hot-services": {
-      const fullOutput = formatAgent(graph)
-      const hotMatch = fullOutput.match(/<hot[\s\S]*?<\/hot>/)
-      yield* Console.log(hotMatch?.[0] ?? "<hot />")
+      if (args[1]) {
+        directory = args[1]
+        const customGraph = yield* buildArchitectureGraph(directory)
+        const fullOutput = formatAgent(customGraph)
+        const hotMatch = fullOutput.match(/<hot[\s\S]*?<\/hot>/)
+        yield* Console.log(hotMatch?.[0] ?? "<hot />")
+      } else {
+        const fullOutput = formatAgent(graph)
+        const hotMatch = fullOutput.match(/<hot[\s\S]*?<\/hot>/)
+        yield* Console.log(hotMatch?.[0] ?? "<hot />")
+      }
       break
     }
 
