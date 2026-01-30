@@ -14,8 +14,7 @@ import {
 } from "../analyze-architecture"
 
 const SERVICE_TAG_PATTERN = /export\s+const\s+(\w+)\s*=\s*Context\.GenericTag<\1>/g
-const LAYER_SCOPED_PATTERN = /export\s+const\s+(\w+Live)\s*=\s*Layer\.scoped\(\s*(\w+)\s*,/g
-const LAYER_EFFECT_PATTERN = /export\s+const\s+(\w+Live)\s*=\s*Layer\.effect\(\s*(\w+)\s*,/g
+const LAYER_PATTERN = /(export\s+)?const\s+(\w+)(?::\s*[^=]+)?\s*=\s*Layer\.(scoped|effect|succeed|sync)\(\s*(\w+)\s*,/g
 
 const EFFECT_INFRASTRUCTURE = new Set([
   "never",
@@ -60,26 +59,24 @@ const extractServicesFromContent = (
 }
 
 const extractLayerMatches = (content: string): ReadonlyArray<LayerMatch> => {
-  const extractWithPattern = (pattern: RegExp): LayerMatch[] => {
-    const results: LayerMatch[] = []
-    pattern.lastIndex = 0
+  const results: LayerMatch[] = []
+  LAYER_PATTERN.lastIndex = 0
 
-    let match: RegExpExecArray | null
-    while ((match = pattern.exec(content)) !== null) {
-      results.push({
-        name: match[1],
-        serviceName: match[2],
-        line: countLinesBefore(content, match.index)
-      })
-    }
+  let match: RegExpExecArray | null
+  while ((match = LAYER_PATTERN.exec(content)) !== null) {
+    const isExported = match[1] !== undefined
+    const varName = match[2]
+    const layerType = match[3]
+    const serviceName = match[4]
 
-    return results
+    results.push({
+      name: varName,
+      serviceName,
+      line: countLinesBefore(content, match.index)
+    })
   }
 
-  return [
-    ...extractWithPattern(LAYER_SCOPED_PATTERN),
-    ...extractWithPattern(LAYER_EFFECT_PATTERN)
-  ]
+  return results
 }
 
 const isEffectInfrastructure = (name: string): boolean =>
@@ -376,6 +373,80 @@ export const KeyBindingRegistryLive = Layer.effect(
       expect(layers).toHaveLength(1)
       expect(layers[0].name).toBe("KeyBindingRegistryLive")
       expect(layers[0].serviceName).toBe("KeyBindingRegistry")
+    })
+
+    it("detects Layer.succeed definitions", () => {
+      const content = `
+export const ConfigLive = Layer.succeed(
+  Config,
+  { apiUrl: "https://api.example.com", timeout: 5000 }
+)
+`
+      const layers = extractLayersFromContent(content, "src/config/Config.live.ts")
+
+      expect(layers).toHaveLength(1)
+      expect(layers[0].name).toBe("ConfigLive")
+      expect(layers[0].serviceName).toBe("Config")
+    })
+
+    it("detects Layer.sync definitions", () => {
+      const content = `
+export const LoggerLive = Layer.sync(
+  Logger,
+  () => ({ log: (msg: string) => console.log(msg) })
+)
+`
+      const layers = extractLayersFromContent(content, "src/services/Logger.live.ts")
+
+      expect(layers).toHaveLength(1)
+      expect(layers[0].name).toBe("LoggerLive")
+      expect(layers[0].serviceName).toBe("Logger")
+    })
+
+    it("detects non-exported layers (Default pattern)", () => {
+      const content = `
+const Default = Layer.scoped(
+  MyService,
+  Effect.gen(function* () {
+    return { value: 42 }
+  })
+)
+`
+      const layers = extractLayersFromContent(content, "src/services/MyService.live.ts")
+
+      expect(layers).toHaveLength(1)
+      expect(layers[0].name).toBe("Default")
+      expect(layers[0].serviceName).toBe("MyService")
+    })
+
+    it("extracts service name from first argument, not variable name", () => {
+      const content = `
+export const MyCustomName = Layer.effect(
+  ActualServiceName,
+  Effect.succeed({ value: 123 })
+)
+`
+      const layers = extractLayersFromContent(content, "src/services/ActualServiceName.live.ts")
+
+      expect(layers).toHaveLength(1)
+      expect(layers[0].name).toBe("MyCustomName")
+      expect(layers[0].serviceName).toBe("ActualServiceName")
+    })
+
+    it("handles layers with explicit type annotations", () => {
+      const content = `
+export const TypedLive: Layer.Layer<MyService, never, Dep1 | Dep2> = Layer.effect(
+  MyService,
+  Effect.gen(function* () {
+    return { value: true }
+  })
+)
+`
+      const layers = extractLayersFromContent(content, "src/services/MyService.live.ts")
+
+      expect(layers).toHaveLength(1)
+      expect(layers[0].name).toBe("TypedLive")
+      expect(layers[0].serviceName).toBe("MyService")
     })
 
     it.skip("extracts dependencies from real layer files using type checker", () => {

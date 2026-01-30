@@ -44,8 +44,8 @@ interface GraphMetrics {
 }
 
 const SERVICE_TAG_PATTERN = /export\s+const\s+(\w+)\s*=\s*Context\.GenericTag<\1>/g
-const LAYER_SCOPED_PATTERN = /export\s+const\s+(\w+Live)(?::\s*[^=]+)?\s*=\s*Layer\.scoped\(\s*(\w+)\s*,/g
-const LAYER_EFFECT_PATTERN = /export\s+const\s+(\w+Live)(?::\s*[^=]+)?\s*=\s*Layer\.effect\(\s*(\w+)\s*,/g
+
+const LAYER_PATTERN = /(export\s+)?const\s+(\w+)(?::\s*[^=]+)?\s*=\s*Layer\.(scoped|effect|succeed|sync)\(\s*(\w+)\s*,/g
 
 const EFFECT_INFRASTRUCTURE = new Set([
   "never",
@@ -92,26 +92,26 @@ interface LayerMatch {
 export const extractLayerMatches = (
   content: string
 ): ReadonlyArray<LayerMatch> => {
-  const extractWithPattern = (pattern: RegExp): LayerMatch[] => {
-    const results: LayerMatch[] = []
-    pattern.lastIndex = 0
+  const results: LayerMatch[] = []
+  LAYER_PATTERN.lastIndex = 0
 
-    let match: RegExpExecArray | null
-    while ((match = pattern.exec(content)) !== null) {
+  let match: RegExpExecArray | null
+  while ((match = LAYER_PATTERN.exec(content)) !== null) {
+    const isExported = match[1] !== undefined
+    const varName = match[2]
+    const layerType = match[3]
+    const serviceName = match[4]
+
+    if (isExported) {
       results.push({
-        name: match[1],
-        serviceName: match[2],
+        name: varName,
+        serviceName: serviceName,
         line: countLinesBefore(content, match.index)
       })
     }
-
-    return results
   }
 
-  return [
-    ...extractWithPattern(LAYER_SCOPED_PATTERN),
-    ...extractWithPattern(LAYER_EFFECT_PATTERN)
-  ]
+  return results
 }
 
 const isEffectInfrastructure = (name: string): boolean =>
