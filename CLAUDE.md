@@ -33,6 +33,14 @@ blocked(task) → report(blocker) ∧ suggest(alternatives)
 risk(action) ≤ low → prefer(action) over prefer(inaction)
 </uncertainty>
 
+<skills>
+known(domain) ∧ known(patterns) → retrieve(skill) → apply
+¬known(domain) → explore → identify(skills) → retrieve → apply
+act(training-only) := violation
+
+∀task: verify(skill-loaded) before implement
+</skills>
+
 <gates>
 gates(typecheck, test) := DELEGATE(agent) ∧ ¬run-directly(orchestrator)
 significant(changes)   := |files| > 1 ∨ architectural(impact)

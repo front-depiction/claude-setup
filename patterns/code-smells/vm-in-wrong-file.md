@@ -3,49 +3,37 @@ action: context
 tool: (Edit|Write)
 event: PostToolUse
 name: vm-in-wrong-file
-description: View Model definitions must be in .vm.ts files - detected VM pattern outside of proper location
-glob: "**/!(*.vm).{ts,tsx}"
-pattern: (interface\s+\w+VM\s*\{|Context\.GenericTag<\w*VM>|Layer\.(effect|scoped)\(\s*\w+VM)
+description: View Model definitions must be in VM files, not React components
+glob: "src/**/*.tsx"
+pattern: (interface\s+\w+VM\s*\{|Context\.(Tag|GenericTag)[<(]|extends\s+Context\.Tag\(|Layer\.(effect|scoped)\(\s*\w+(VM|Service))
 tag: vm-location
 level: critical
 ---
 
-# VM Code in Wrong File
+# VM Code in Component File
 
 ```haskell
 -- File structure convention
-data ComponentFiles = ComponentFiles
-  { component :: "Component.tsx"      -- pure renderer
-  , viewModel :: "Component.vm.ts"    -- VM definition
-  , index     :: "index.ts"           -- re-exports
-  }
-
--- VM file structure
-data VMFile a = VMFile
-  { interface :: Interface a          -- type contract
-  , tag       :: GenericTag a         -- DI tag
-  , layer     :: Layer a              -- implementation
+data VMFiles = VMFiles
+  { definition :: "FooVM.ts"          -- interface + Tag
+  , live       :: "FooVM.live.ts"     -- Layer + VMKey
+  , component  :: "Foo.tsx"           -- pure renderer (no VM code)
   }
 ```
 
 ```haskell
--- Anti-pattern: VM in component file
-bad :: "Component.tsx"
+-- Anti-pattern: VM code in component
+bad :: "Foo.tsx"
 bad = do
-  interface ComponentVM { ... }       -- ✗ wrong file
-  ComponentVM = GenericTag<...>       -- ✗ wrong file
-  layer = Layer.effect(...)           -- ✗ wrong file
+  interface FooVM { ... }             -- ✗ belongs in FooVM.ts
+  FooVMService = Context.Tag(...)     -- ✗ belongs in FooVM.ts
+  FooVMLive = Layer.scoped(...)       -- ✗ belongs in FooVM.live.ts
 
--- Correct: VM in dedicated file
-good :: "Component.vm.ts"
+-- Correct: import from VM files
+good :: "Foo.tsx"
 good = do
-  interface ComponentVM { ... }       -- ✓ correct file
-  ComponentVM = GenericTag<...>       -- ✓ correct file
-  layer = Layer.effect(...)           -- ✓ correct file
-  export default { tag, layer }       -- ✓ clean export
-
--- Import in component
-import ComponentVM from "./Component.vm"
+  import { FooVMKey } from "./FooVM.live"
+  const result = useVM(FooVMKey)
 ```
 
-VMs must be in `.vm.ts` files. Mixing rendering and state management breaks organization. Invoke `react-vm` skill for guidance.
+Components are pure renderers. VM interfaces and tags belong in `FooVM.ts`, layers and keys in `FooVM.live.ts`.

@@ -330,6 +330,11 @@ typeSystemBypassed code = any code
 
   // Forbidden tools reminder
   parts.push(`<FORBIDDEN_TOOLS>
+NEVER USE BACKGROUND AGENTS IF YOU READ THEM:
+- Background + wait → insane context waste (full output in context)
+- Regular Parallel Agents → context efficient
+- Background + other works → you cna use background agents if you genuinenly perform other work and dont sit and wait for output.
+
 NEVER USE DIRECTLY:
 - Read   → spawn agent to read
 - Edit   → spawn agent to edit

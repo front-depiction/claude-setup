@@ -488,8 +488,9 @@ interface DependencyInfo {
 }
 
 interface GroupedServices {
+  readonly root: ReadonlyArray<ServiceDefinition>
+  readonly intermediate: ReadonlyArray<ServiceDefinition>
   readonly leaf: ReadonlyArray<ServiceDefinition>
-  readonly mid: ReadonlyArray<ServiceDefinition>
   readonly vm: ReadonlyArray<ServiceDefinition>
   readonly orphans: ReadonlyArray<ServiceDefinition>
 }
@@ -578,34 +579,39 @@ const groupServicesByType = (
   layerByService: Map<string, LayerDefinition>,
   analysisGraph: AnalysisGraph
 ): GroupedServices => {
-  const orphanNames = detectOrphans(analysisGraph)
+  const indegree = computeIndegrees(analysisGraph)
+  const outdegree = computeOutdegrees(analysisGraph)
 
+  const root: ServiceDefinition[] = []
+  const intermediate: ServiceDefinition[] = []
   const leaf: ServiceDefinition[] = []
-  const mid: ServiceDefinition[] = []
   const vm: ServiceDefinition[] = []
   const orphans: ServiceDefinition[] = []
 
   graph.services.forEach((service) => {
-    if (orphanNames.has(service.name)) {
-      orphans.push(service)
-      return
-    }
-
-    const layer = layerByService.get(service.name)
-    const hasDeps = (layer?.dependencies.length ?? 0) > 0
+    const inDeg = indegree.get(service.name) ?? 0
+    const outDeg = outdegree.get(service.name) ?? 0
 
     if (service.name.endsWith("VM")) {
       vm.push(service)
-    } else if (!hasDeps) {
+      return
+    }
+
+    if (inDeg === 0 && outDeg === 0) {
+      orphans.push(service)
+    } else if (outDeg === 0 && inDeg > 0) {
+      root.push(service)
+    } else if (outDeg > 0 && inDeg === 0) {
       leaf.push(service)
     } else {
-      mid.push(service)
+      intermediate.push(service)
     }
   })
 
   return {
+    root: pipe(root, Array.sort(Order.mapInput(Order.string, (s: ServiceDefinition) => s.name))),
+    intermediate: pipe(intermediate, Array.sort(Order.mapInput(Order.string, (s: ServiceDefinition) => s.name))),
     leaf: pipe(leaf, Array.sort(Order.mapInput(Order.string, (s: ServiceDefinition) => s.name))),
-    mid: pipe(mid, Array.sort(Order.mapInput(Order.string, (s: ServiceDefinition) => s.name))),
     vm: pipe(vm, Array.sort(Order.mapInput(Order.string, (s: ServiceDefinition) => s.name))),
     orphans: pipe(orphans, Array.sort(Order.mapInput(Order.string, (s: ServiceDefinition) => s.name)))
   }
@@ -654,12 +660,19 @@ export const formatHuman = (graph: ArchitectureGraph): string => {
 
   const output: string[] = []
 
-  const leafNames = grouped.leaf.map((s) => s.name).join(", ")
-  output.push(`[Leaf] ${leafNames}`)
+  const rootNames = grouped.root.map((s) => s.name).join(", ")
+  output.push(`[Root] ${rootNames}`)
   output.push("")
 
-  output.push("[Mid]")
-  grouped.mid.forEach((service) => {
+  output.push("[Intermediate]")
+  grouped.intermediate.forEach((service) => {
+    output.push(`${service.name} (${makeShortPath(service.path)})`)
+    output.push(...renderExpandedTree(service.name, layerByService, analysisGraph))
+    output.push("")
+  })
+
+  output.push("[Leaf]")
+  grouped.leaf.forEach((service) => {
     output.push(`${service.name} (${makeShortPath(service.path)})`)
     output.push(...renderExpandedTree(service.name, layerByService, analysisGraph))
     output.push("")
@@ -818,8 +831,8 @@ const checkInvariants = (
   const grouped = groupServicesByType(graph, layerByService, analysisGraph)
 
   const vmNames = new Set(grouped.vm.map((s) => s.name))
-  const leafNames = new Set(grouped.leaf.map((s) => s.name))
-  const midNames = new Set(grouped.mid.map((s) => s.name))
+  const rootNames = new Set(grouped.root.map((s) => s.name))
+  const intermediateNames = new Set(grouped.intermediate.map((s) => s.name))
 
   grouped.vm.forEach((vm) => {
     const layer = layerByService.get(vm.name)
@@ -855,25 +868,25 @@ const checkInvariants = (
     })
   })
 
-  grouped.leaf.forEach((service) => {
+  grouped.root.forEach((service) => {
     const layer = layerByService.get(service.name)
     const deps = layer?.dependencies ?? []
     if (deps.length > 0) {
       violations.push({
         invariant: "INV-4",
-        description: `Leaf ${service.name} has deps: ${deps.join(", ")}`
+        description: `Root ${service.name} has deps: ${deps.join(", ")}`
       })
     }
   })
 
-  grouped.mid.forEach((service) => {
+  grouped.intermediate.forEach((service) => {
     const layer = layerByService.get(service.name)
     const deps = layer?.dependencies ?? []
-    const invalidDeps = deps.filter((d) => !leafNames.has(d) && !midNames.has(d))
+    const invalidDeps = deps.filter((d) => !rootNames.has(d) && !intermediateNames.has(d))
     if (invalidDeps.length > 0) {
       violations.push({
         invariant: "INV-5",
-        description: `Mid ${service.name} depends on non-mid/leaf: ${invalidDeps.join(", ")}`
+        description: `Intermediate ${service.name} depends on non-intermediate/root: ${invalidDeps.join(", ")}`
       })
     }
   })
@@ -1021,46 +1034,51 @@ export interface BlastRadiusResult {
     readonly depth: number
     readonly services: ReadonlyArray<string>
   }>
-  readonly upstream: ReadonlyArray<{
+  readonly downstreamCount: number
+  readonly risk: "HIGH" | "MEDIUM" | "LOW"
+}
+
+export interface AncestorsResult {
+  readonly service: string
+  readonly ancestors: ReadonlyArray<{
     readonly depth: number
     readonly services: ReadonlyArray<string>
   }>
-  readonly downstreamCount: number
-  readonly upstreamCount: number
-  readonly risk: "HIGH" | "MEDIUM" | "LOW"
+  readonly totalCount: number
 }
 
 const groupByDepth = (
   analysisGraph: AnalysisGraph,
-  walker: Graph.NodeWalker<ServiceDefinition, void>,
   startIdx: Graph.NodeIndex,
   direction: "incoming" | "outgoing"
 ): ReadonlyArray<{ readonly depth: number; readonly services: ReadonlyArray<string> }> => {
   const depthMap = new Map<Graph.NodeIndex, number>()
+  const visited = new Set<Graph.NodeIndex>()
+
   depthMap.set(startIdx, 0)
+  visited.add(startIdx)
 
-  const reverseDirection = direction === "incoming" ? "outgoing" : "incoming"
+  const queue: Array<{ idx: Graph.NodeIndex; depth: number }> = [{ idx: startIdx, depth: 0 }]
 
-  for (const [idx, service] of walker) {
-    if (idx === startIdx) continue
+  while (queue.length > 0) {
+    const { idx, depth } = queue.shift()!
 
-    const predecessors = Graph.neighborsDirected(analysisGraph.graph, idx, reverseDirection as "incoming" | "outgoing")
-    const predecessorDepths = pipe(
-      predecessors,
-      Array.filterMap((predIdx) => {
-        const depth = depthMap.get(predIdx)
-        return depth !== undefined ? Option.some(depth) : Option.none()
-      })
-    )
+    const neighbors = Graph.neighborsDirected(analysisGraph.graph, idx, direction)
 
-    if (predecessorDepths.length > 0) {
-      depthMap.set(idx, Math.min(...predecessorDepths) + 1)
+    for (const neighborIdx of neighbors) {
+      if (!visited.has(neighborIdx)) {
+        visited.add(neighborIdx)
+        depthMap.set(neighborIdx, depth + 1)
+        queue.push({ idx: neighborIdx, depth: depth + 1 })
+      }
     }
   }
 
   const levelGroups = new Map<number, string[]>()
-  for (const [idx, depth] of depthMap.entries()) {
+
+  for (const [idx, depth] of depthMap) {
     if (idx === startIdx) continue
+
     const node = Graph.getNode(analysisGraph.graph, idx)
     if (Option.isSome(node)) {
       const group = levelGroups.get(depth) ?? []
@@ -1086,25 +1104,9 @@ export const computeBlastRadius = (
   const serviceIdx = analysisGraph.serviceIndex.get(serviceName)
   if (serviceIdx === undefined) return Option.none()
 
-  const downstreamWalker = Graph.bfs(analysisGraph.graph, {
-    start: [serviceIdx],
-    direction: "incoming"
-  })
-
-  const downstream = groupByDepth(analysisGraph, downstreamWalker, serviceIdx, "incoming")
+  const downstream = groupByDepth(analysisGraph, serviceIdx, "incoming")
   const downstreamCount = pipe(
     downstream,
-    Array.flatMap((level) => level.services)
-  ).length
-
-  const upstreamWalker = Graph.bfs(analysisGraph.graph, {
-    start: [serviceIdx],
-    direction: "outgoing"
-  })
-
-  const upstream = groupByDepth(analysisGraph, upstreamWalker, serviceIdx, "outgoing")
-  const upstreamCount = pipe(
-    upstream,
     Array.flatMap((level) => level.services)
   ).length
 
@@ -1113,10 +1115,28 @@ export const computeBlastRadius = (
   return Option.some({
     service: serviceName,
     downstream,
-    upstream,
     downstreamCount,
-    upstreamCount,
     risk
+  })
+}
+
+export const computeAncestors = (
+  analysisGraph: AnalysisGraph,
+  serviceName: string
+): Option.Option<AncestorsResult> => {
+  const serviceIdx = analysisGraph.serviceIndex.get(serviceName)
+  if (serviceIdx === undefined) return Option.none()
+
+  const ancestors = groupByDepth(analysisGraph, serviceIdx, "outgoing")
+  const totalCount = pipe(
+    ancestors,
+    Array.flatMap((level) => level.services)
+  ).length
+
+  return Option.some({
+    service: serviceName,
+    ancestors,
+    totalCount
   })
 }
 
@@ -1136,29 +1156,17 @@ export const renderBlastRadius = (result: BlastRadiusResult): string => {
   }
   sections.push(`  </downstream>`)
 
-  sections.push(`  <upstream n="${result.upstreamCount}">`)
-  if (result.upstream.length > 0) {
-    result.upstream.forEach((level) => {
-      sections.push(`    <level depth="${level.depth}" count="${level.services.length}">`)
-      level.services.forEach((service) => {
-        sections.push(`      <service>${service}</service>`)
-      })
-      sections.push(`    </level>`)
-    })
-  }
-  sections.push(`  </upstream>`)
-
   sections.push(`</blast_radius>`)
   return sections.join("\n")
 }
 
-export const renderAncestors = (result: BlastRadiusResult): string => {
+export const renderAncestors = (result: AncestorsResult): string => {
   const sections: string[] = []
   sections.push(`<ancestors service="${result.service}">`)
 
-  sections.push(`  <upstream n="${result.upstreamCount}">`)
-  if (result.upstream.length > 0) {
-    result.upstream.forEach((level) => {
+  sections.push(`  <dependencies n="${result.totalCount}">`)
+  if (result.ancestors.length > 0) {
+    result.ancestors.forEach((level) => {
       sections.push(`    <level depth="${level.depth}" count="${level.services.length}">`)
       level.services.forEach((service) => {
         sections.push(`      <service>${service}</service>`)
@@ -1166,7 +1174,7 @@ export const renderAncestors = (result: BlastRadiusResult): string => {
       sections.push(`    </level>`)
     })
   }
-  sections.push(`  </upstream>`)
+  sections.push(`  </dependencies>`)
 
   sections.push(`</ancestors>`)
   return sections.join("\n")
@@ -1468,15 +1476,21 @@ const renderNodeClassification = (graph: ArchitectureGraph, analysisGraph: Analy
   const layerByService = buildLayerMap(graph.layers)
   const grouped = groupServicesByType(graph, layerByService, analysisGraph)
 
+  const orphanCount = grouped.orphans.length
+  const rootCount = grouped.root.length
+  const intermediateCount = grouped.intermediate.length
   const leafCount = grouped.leaf.length
-  const midCount = grouped.mid.length
   const vmCount = grouped.vm.length
-  const total = leafCount + midCount + vmCount
+  const total = orphanCount + rootCount + intermediateCount + leafCount + vmCount
 
   const sections: string[] = []
   sections.push(`<node_classification n="${total}">`)
+  if (orphanCount > 0) {
+    sections.push(`  <orphan n="${orphanCount}">${grouped.orphans.map((s) => s.name).join(", ")}</orphan>`)
+  }
+  sections.push(`  <root n="${rootCount}">${grouped.root.map((s) => s.name).join(", ")}</root>`)
+  sections.push(`  <intermediate n="${intermediateCount}">${grouped.intermediate.map((s) => s.name).join(", ")}</intermediate>`)
   sections.push(`  <leaf n="${leafCount}">${grouped.leaf.map((s) => s.name).join(", ")}</leaf>`)
-  sections.push(`  <mid n="${midCount}">${grouped.mid.map((s) => s.name).join(", ")}</mid>`)
   sections.push(`  <vm n="${vmCount}">${grouped.vm.map((s) => s.name).join(", ")}</vm>`)
   sections.push(`</node_classification>`)
 
@@ -1486,7 +1500,6 @@ const renderNodeClassification = (graph: ArchitectureGraph, analysisGraph: Analy
 const renderEdges = (graph: ArchitectureGraph, analysisGraph: AnalysisGraph): string => {
   const layerByService = buildLayerMap(graph.layers)
   const ordered = orderServicesByDependencyCount(graph, analysisGraph)
-  const maxNameLen = Math.max(...graph.services.map((s) => s.name.length))
 
   const edgeLines = ordered.map((item) => {
     const deps = pipe(
@@ -1498,19 +1511,15 @@ const renderEdges = (graph: ArchitectureGraph, analysisGraph: AnalysisGraph): st
     )
 
     const errorTypes = item.layer?.errorTypes ?? []
-    const errorInfo = formatErrorInfo(errorTypes, true)
+    const serviceName = item.service.name
 
-    const depCount = deps.length
-    const paddedName = item.service.name.padEnd(maxNameLen)
+    const errorUnion = errorTypes.length > 0 ? errorTypes.join(" | ") : "never"
+    const depUnion = deps.length > 0 ? deps.join(" | ") : "never"
 
-    const depDisplay = depCount === 0
-      ? "→ ∅"
-      : `${depCount} → ${deps.join(", ")}`
-
-    return `  ${paddedName} ${depDisplay}${errorInfo}`
+    return `  ${serviceName}<${errorUnion}, ${depUnion}>`
   })
 
-  return `<edges n="${graph.services.length}">\n${edgeLines.join("\n")}\n</edges>`
+  return `<adjacency_list n="${graph.services.length}">\n${edgeLines.join("\n")}\n</adjacency_list>`
 }
 
 const renderInvariants = (graph: ArchitectureGraph, analysisGraph: AnalysisGraph): string => {
@@ -1525,8 +1534,8 @@ const renderInvariants = (graph: ArchitectureGraph, analysisGraph: AnalysisGraph
     { id: "1", description: "VMs never depend on VMs" },
     { id: "2", description: "Services never depend on VMs" },
     { id: "3", description: "Graph is acyclic" },
-    { id: "4", description: "Leaf services have no dependencies" },
-    { id: "5", description: "Mid services only depend on leaf or mid" }
+    { id: "4", description: "Root services have no dependencies" },
+    { id: "5", description: "Intermediate services only depend on root or intermediate" }
   ]
 
   const sections: string[] = []
@@ -1606,9 +1615,43 @@ const renderViolations = (
 const renderMetrics = (metrics: GraphMetrics): string => {
   const sections: string[] = []
   sections.push("<metrics>")
-  sections.push(`  <density value="${metrics.density.toFixed(3)}" description="Edge count / max possible. <0.2 sparse (good), >0.4 dense (coupled)" />`)
-  sections.push(`  <diameter value="${metrics.diameter}" description="Longest shortest path. ≤3 shallow (good), >5 deep (long chains)" />`)
-  sections.push(`  <average_degree value="${metrics.averageDegree.toFixed(2)}" description="Average connections per service" />`)
+
+  const densityStatus =
+    metrics.density < 0.2 ? "good" :
+    metrics.density < 0.4 ? "moderate" :
+    "bad"
+
+  const densityMessage =
+    metrics.density < 0.2 ? "Sparse architecture with loose coupling (below 0.2 threshold)" :
+    metrics.density < 0.4 ? "Moderate coupling (0.2-0.4 range)" :
+    "Dense architecture with tight coupling (above 0.4 threshold)"
+
+  sections.push(`  <density value="${metrics.density.toFixed(3)}" status="${densityStatus}">${densityMessage}</density>`)
+
+  const diameterStatus =
+    metrics.diameter <= 3 ? "good" :
+    metrics.diameter <= 5 ? "moderate" :
+    "bad"
+
+  const diameterMessage =
+    metrics.diameter <= 3 ? "Shallow dependency chains (≤3 hops)" :
+    metrics.diameter <= 5 ? "Moderate depth (4-5 hops)" :
+    "Deep dependency chains (>5 hops)"
+
+  sections.push(`  <diameter value="${metrics.diameter}" status="${diameterStatus}">${diameterMessage}</diameter>`)
+
+  const avgDegreeStatus =
+    metrics.averageDegree < 2 ? "good" :
+    metrics.averageDegree < 4 ? "moderate" :
+    "bad"
+
+  const avgDegreeMessage =
+    metrics.averageDegree < 2 ? "Minimal coupling (< 2 connections per service)" :
+    metrics.averageDegree < 4 ? "Moderate connectivity (2-4 connections per service)" :
+    "High connectivity (≥4 connections per service)"
+
+  sections.push(`  <average_degree value="${metrics.averageDegree.toFixed(2)}" status="${avgDegreeStatus}">${avgDegreeMessage}</average_degree>`)
+
   sections.push("</metrics>")
   return sections.join("\n")
 }
@@ -1671,6 +1714,256 @@ const renderAdvancedMetrics = (metrics: AdvancedMetrics): string => {
 
   sections.push("</advanced_metrics>")
   return sections.join("\n")
+}
+
+const renderDebugSection = (): string => {
+  const lines: string[] = []
+
+  lines.push("<debug>")
+  lines.push("  <hint>For impact analysis and debugging, these commands are available</hint>")
+  lines.push("  ")
+  lines.push("  <available_commands>")
+
+  lines.push("    <command name=\"blast-radius\">")
+  lines.push("      <usage>architecture blast-radius SERVICE_NAME</usage>")
+  lines.push("      <description>Shows downstream impact: all services that depend on this (full transitive closure)</description>")
+  lines.push("      <when_to_use>Before making changes to assess blast radius and testing scope</when_to_use>")
+  lines.push("      <example>architecture blast-radius TodoQueryService</example>")
+  lines.push("      <output>Risk level (HIGH/MEDIUM/LOW), all affected services grouped by depth (unlimited depth)</output>")
+  lines.push("    </command>")
+
+  lines.push("    <command name=\"ancestors\">")
+  lines.push("      <usage>architecture ancestors SERVICE_NAME</usage>")
+  lines.push("      <description>Shows all upstream dependencies (full transitive closure)</description>")
+  lines.push("      <when_to_use>To understand complete dependency tree of a service</when_to_use>")
+  lines.push("      <example>architecture ancestors SidebarVM</example>")
+  lines.push("      <output>All dependencies grouped by depth level (unlimited depth)</output>")
+  lines.push("    </command>")
+
+  lines.push("    <command name=\"common-ancestors\">")
+  lines.push("      <usage>architecture common-ancestors SERVICE1 SERVICE2 ...</usage>")
+  lines.push("      <description>Finds shared dependencies across multiple services</description>")
+  lines.push("      <when_to_use>When multiple services fail - identifies root cause candidates</when_to_use>")
+  lines.push("      <example>architecture common-ancestors SidebarVM DetailPanelVM StatsPanelVM</example>")
+  lines.push("      <output>Shared dependencies ranked by coverage percentage, root cause candidates</output>")
+  lines.push("    </command>")
+
+  lines.push("    <command name=\"metrics\">")
+  lines.push("      <usage>architecture metrics</usage>")
+  lines.push("      <description>Quick health check showing only graph metrics</description>")
+  lines.push("      <when_to_use>Fast health assessment or trending over time</when_to_use>")
+  lines.push("      <output>Density, diameter, average degree with interpretation thresholds</output>")
+  lines.push("    </command>")
+
+  lines.push("    <command name=\"domains\">")
+  lines.push("      <usage>architecture domains</usage>")
+  lines.push("      <description>Discover architectural domains via cut vertex detection</description>")
+  lines.push("      <when_to_use>Understanding module boundaries, planning package splits or microservices</when_to_use>")
+  lines.push("      <output>Domain bridges (cut vertices) and grouped services by domain</output>")
+  lines.push("    </command>")
+
+  lines.push("    <command name=\"hot-services\">")
+  lines.push("      <usage>architecture hot-services</usage>")
+  lines.push("      <description>Lists high-risk services with many dependents (≥4)</description>")
+  lines.push("      <when_to_use>Identifying critical infrastructure needing stability and comprehensive testing</when_to_use>")
+  lines.push("      <output>Services ranked by dependent count</output>")
+  lines.push("    </command>")
+
+  lines.push("    <command name=\"format\">")
+  lines.push("      <usage>architecture format --format FORMAT</usage>")
+  lines.push("      <description>Output analysis in different formats: mermaid, human, adjacency</description>")
+  lines.push("      <when_to_use>Visualization (mermaid) or data export (adjacency)</when_to_use>")
+  lines.push("      <example>architecture format --format mermaid --output diagram.mmd</example>")
+  lines.push("      <formats>")
+  lines.push("        <format name=\"mermaid\">Flowchart diagram for visualization</format>")
+  lines.push("        <format name=\"human\">Tree structure with root/intermediate/leaf/VM grouping</format>")
+  lines.push("        <format name=\"adjacency\">Simple list format for data export</format>")
+  lines.push("      </formats>")
+  lines.push("    </command>")
+
+  lines.push("  </available_commands>")
+  lines.push("  ")
+  lines.push("  <workflows>")
+
+  lines.push("    <workflow name=\"Impact Assessment\">")
+  lines.push("      <step>1. Run: architecture blast-radius ServiceName</step>")
+  lines.push("      <step>2. Check downstream count and risk level</step>")
+  lines.push("      <step>3. Review affected services by depth</step>")
+  lines.push("      <step>4. Plan testing strategy based on risk</step>")
+  lines.push("    </workflow>")
+
+  lines.push("    <workflow name=\"Root Cause Analysis\">")
+  lines.push("      <step>1. Identify all failing services</step>")
+  lines.push("      <step>2. Run: architecture common-ancestors Service1 Service2 Service3</step>")
+  lines.push("      <step>3. Check dependencies with 100% coverage (all services depend on it)</step>")
+  lines.push("      <step>4. Investigate top root cause candidate first</step>")
+  lines.push("      <step>5. Check recent changes to identified dependency</step>")
+  lines.push("    </workflow>")
+
+  lines.push("    <workflow name=\"Architecture Health Check\">")
+  lines.push("      <step>1. Run: architecture metrics</step>")
+  lines.push("      <step>2. Check density (should be less than 0.2 for good coupling)</step>")
+  lines.push("      <step>3. Check diameter (should be less than or equal to 3 for shallow chains)</step>")
+  lines.push("      <step>4. Run: architecture analyze --all for full analysis if metrics are concerning</step>")
+  lines.push("    </workflow>")
+
+  lines.push("    <workflow name=\"Domain Discovery\">")
+  lines.push("      <step>1. Run: architecture domains</step>")
+  lines.push("      <step>2. Identify domain bridges (cut vertices)</step>")
+  lines.push("      <step>3. Review domain groupings</step>")
+  lines.push("      <step>4. Consider package splits along domain boundaries</step>")
+  lines.push("    </workflow>")
+
+  lines.push("  </workflows>")
+  lines.push("</debug>")
+
+  return lines.join("\n")
+}
+
+const renderDomainsFromAdvanced = (advancedMetrics: AdvancedMetrics): string => {
+  const sections: string[] = []
+
+  const bridgeDesc = "Cut vertices connecting domains"
+  const bridges = advancedMetrics.domainAnalysis.cutVertices
+  sections.push(`<domains n="${bridges.length + advancedMetrics.domainAnalysis.domains.length}">`)
+  sections.push(`  <domain_bridges n="${bridges.length}" description="${bridgeDesc}">`)
+  if (bridges.length > 0) {
+    bridges.forEach(serviceName => {
+      sections.push(`    ${serviceName}`)
+    })
+  }
+  sections.push(`  </domain_bridges>`)
+
+  const domainDesc = "Isolated subgraphs after removing bridges"
+  const domains = advancedMetrics.domainAnalysis.domains
+  sections.push(`  <isolated_domains n="${domains.length}" description="${domainDesc}">`)
+  domains.forEach(domain => {
+    sections.push(`    <domain name="${domain.name}" size="${domain.size}">`)
+    sections.push(`      ${domain.services.join(", ")}`)
+    sections.push(`    </domain>`)
+  })
+  sections.push(`  </isolated_domains>`)
+  sections.push("</domains>")
+
+  return sections.join("\n")
+}
+
+interface RenderOptions {
+  readonly showMetrics: boolean
+  readonly showDomains: boolean
+  readonly showAdvanced: boolean
+  readonly showWarnings: boolean
+}
+
+export const formatAgentWithHints = (
+  graph: ArchitectureGraph,
+  options: RenderOptions
+): string => {
+  const analysisGraph = buildAnalysisGraph(graph)
+  const layerByService = buildLayerMap(graph.layers)
+  const grouped = groupServicesByType(graph, layerByService, analysisGraph)
+
+  const metrics: GraphMetrics = {
+    density: computeDensity(analysisGraph),
+    diameter: computeDiameter(analysisGraph),
+    averageDegree: computeAverageDegree(analysisGraph)
+  }
+
+  const advancedMetrics: AdvancedMetrics = {
+    betweennessCentrality: computeBetweennessCentrality(analysisGraph),
+    clusteringCoefficient: computeClusteringCoefficient(analysisGraph),
+    domainAnalysis: detectCutVerticesAndDomains(analysisGraph)
+  }
+
+  const output: string[] = []
+
+  output.push("<architecture>")
+  output.push("")
+
+  output.push(renderLocations(graph))
+  output.push("")
+
+  output.push(renderNodeClassification(graph, analysisGraph))
+  output.push("")
+
+  output.push(renderEdges(graph, analysisGraph))
+  output.push("")
+
+  if (options.showMetrics) {
+    output.push(renderMetrics(metrics))
+  } else {
+    output.push("<metrics collapsed=\"true\">")
+    output.push("  <hint>Run with --metrics flag to show graph metrics</hint>")
+    output.push("  <description>Graph metrics include density (coupling), diameter (chain length), and average degree (connections per service)</description>")
+    output.push("  <usage>architecture analyze --metrics</usage>")
+    output.push("</metrics>")
+  }
+  output.push("")
+
+  if (options.showAdvanced) {
+    output.push(renderAdvancedMetrics(advancedMetrics))
+  } else {
+    output.push("<advanced_metrics collapsed=\"true\">")
+    output.push("  <hint>Run with --advanced flag for betweenness centrality and clustering analysis</hint>")
+    output.push("  <description>Advanced metrics identify god services, tight clusters, and architectural smells</description>")
+    output.push("  <usage>architecture analyze --advanced</usage>")
+    output.push("</advanced_metrics>")
+  }
+  output.push("")
+
+  if (options.showDomains) {
+    output.push(renderDomainsFromAdvanced(advancedMetrics))
+  } else {
+    output.push("<domains collapsed=\"true\">")
+    output.push("  <hint>Run with --domains flag to discover architectural domain boundaries</hint>")
+    output.push("  <description>Domain analysis uses cut vertex detection to identify natural module boundaries and services that bridge separate domains</description>")
+    output.push("  <usage>architecture analyze --domains</usage>")
+    output.push("</domains>")
+  }
+  output.push("")
+
+  if (grouped.orphans.length > 0) {
+    const orphanLines = grouped.orphans.map(s => `  ${s.name} (${makeShortPath(s.path)})`)
+    output.push(`<orphans n="${grouped.orphans.length}">`)
+    output.push(orphanLines.join("\n"))
+    output.push("</orphans>")
+  } else {
+    output.push(`<orphans n="0" />`)
+  }
+  output.push("")
+
+  output.push(renderInvariants(graph, analysisGraph))
+  output.push("")
+
+  if (options.showWarnings) {
+    output.push(renderWarnings(graph, analysisGraph))
+  } else {
+    const warnings = computeWarnings(graph, analysisGraph)
+    const warningCount =
+      (warnings.redundant?.length ?? 0) +
+      (warnings.hot?.length ?? 0) +
+      (warnings.wide?.length ?? 0)
+
+    output.push("<warnings collapsed=\"true\">")
+    output.push(`  <hint>${warningCount} potential warnings found (run with --warnings for details)</hint>`)
+    output.push("  <summary>")
+    output.push(`    <redundant n="${warnings.redundant?.length ?? 0}" />`)
+    output.push(`    <hot n="${warnings.hot?.length ?? 0}" />`)
+    output.push(`    <wide n="${warnings.wide?.length ?? 0}" />`)
+    output.push("  </summary>")
+    output.push("</warnings>")
+  }
+  output.push("")
+
+  output.push(renderViolations(graph, analysisGraph))
+  output.push("")
+
+  output.push(renderDebugSection())
+  output.push("")
+
+  output.push("</architecture>")
+
+  return output.join("\n")
 }
 
 export const formatAgent = (graph: ArchitectureGraph): string => {

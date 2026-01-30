@@ -47,16 +47,28 @@ const runInProjectRoot = <A, E, R>(
 
 const analyzeCommand = Command.make(
   "analyze",
-  {},
-  () =>
+  {
+    metrics: Options.boolean("metrics").pipe(Options.withDefault(false)),
+    domains: Options.boolean("domains").pipe(Options.withDefault(false)),
+    advanced: Options.boolean("advanced").pipe(Options.withDefault(false)),
+    warnings: Options.boolean("warnings").pipe(Options.withDefault(false)),
+    all: Options.boolean("all").pipe(Options.withDefault(false))
+  },
+  ({ metrics, domains, advanced, warnings, all }) =>
     runInProjectRoot((_root, analyzer) =>
       Effect.gen(function* () {
         const graph = yield* analyzer.buildArchitectureGraph
-        yield* Console.log(analyzer.formatAgent(graph))
+        const output = analyzer.formatAgentWithHints(graph, {
+          showMetrics: all || metrics,
+          showDomains: all || domains,
+          showAdvanced: all || advanced,
+          showWarnings: all || warnings
+        })
+        yield* Console.log(output)
       })
     )
 ).pipe(
-  Command.withDescription("Full dependency graph analysis with metrics, warnings, and violations")
+  Command.withDescription("Full dependency graph analysis with progressive disclosure")
 )
 
 const blastRadiusCommand = Command.make(
@@ -79,7 +91,7 @@ const blastRadiusCommand = Command.make(
       })
     )
 ).pipe(
-  Command.withDescription("Show blast radius (upstream/downstream) for a service")
+  Command.withDescription("Show downstream impact (who depends on this service)")
 )
 
 const commonAncestorsCommand = Command.make(
@@ -106,7 +118,7 @@ const ancestorsCommand = Command.make(
       Effect.gen(function* () {
         const graph = yield* analyzer.buildArchitectureGraph
         const analysisGraph = analyzer.buildAnalysisGraph(graph)
-        const result = analyzer.computeBlastRadius(analysisGraph, service)
+        const result = analyzer.computeAncestors(analysisGraph, service)
         yield* pipe(
           result,
           Option.match({
@@ -118,7 +130,7 @@ const ancestorsCommand = Command.make(
       })
     )
 ).pipe(
-  Command.withDescription("Show all upstream dependencies (transitive closure) for a service")
+  Command.withDescription("Show all upstream dependencies (full transitive closure)")
 )
 
 const metricsCommand = Command.make(
@@ -127,6 +139,8 @@ const metricsCommand = Command.make(
   () =>
     runInProjectRoot((_root, analyzer) =>
       Effect.gen(function* () {
+        yield* Console.log("<hint>Tip: Use 'architecture analyze --metrics' to see this in full context</hint>")
+        yield* Console.log("")
         const graph = yield* analyzer.buildArchitectureGraph
         const fullOutput = analyzer.formatAgent(graph)
         const metricsMatch = fullOutput.match(/<metrics>[\s\S]*?<\/metrics>/)
@@ -134,7 +148,7 @@ const metricsCommand = Command.make(
       })
     )
 ).pipe(
-  Command.withDescription("Show graph metrics only (density, diameter, average degree)")
+  Command.withDescription("Quick health check showing only graph metrics")
 )
 
 const domainsCommand = Command.make(
