@@ -45,7 +45,7 @@ interface GraphMetrics {
 
 const SERVICE_TAG_PATTERN = /export\s+const\s+(\w+)\s*=\s*Context\.GenericTag<\1>/g
 
-const LAYER_PATTERN = /(export\s+)?const\s+(\w+)(?::\s*[^=]+)?\s*=\s*Layer\.(scoped|effect|succeed|sync)\(\s*(\w+)\s*,/g
+const LAYER_PATTERN = /(export\s+)?const\s+(\w+)[\s\S]*?Layer\.(scoped|effect|succeed|sync)\s*\(\s*(\w+)\s*,/g
 
 const EFFECT_INFRASTRUCTURE = new Set([
   "never",

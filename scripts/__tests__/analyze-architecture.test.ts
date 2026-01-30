@@ -14,7 +14,7 @@ import {
 } from "../analyze-architecture"
 
 const SERVICE_TAG_PATTERN = /export\s+const\s+(\w+)\s*=\s*Context\.GenericTag<\1>/g
-const LAYER_PATTERN = /(export\s+)?const\s+(\w+)(?::\s*[^=]+)?\s*=\s*Layer\.(scoped|effect|succeed|sync)\(\s*(\w+)\s*,/g
+const LAYER_PATTERN = /(export\s+)?const\s+(\w+)[\s\S]*?Layer\.(scoped|effect|succeed|sync)\s*\(\s*(\w+)\s*,/g
 
 const EFFECT_INFRASTRUCTURE = new Set([
   "never",
@@ -447,6 +447,55 @@ export const TypedLive: Layer.Layer<MyService, never, Dep1 | Dep2> = Layer.effec
       expect(layers).toHaveLength(1)
       expect(layers[0].name).toBe("TypedLive")
       expect(layers[0].serviceName).toBe("MyService")
+    })
+
+    it("handles layers with multi-line type annotations", () => {
+      const content = `
+export const Default: Layer.Layer<
+  Service,
+  never,
+  | Dep1
+  | Dep2
+> = Layer.scoped(
+  Service,
+  Effect.gen(function* () {
+    return { value: 42 }
+  })
+)
+`
+      const layers = extractLayersFromContent(content, "src/services/Service.live.ts")
+
+      expect(layers).toHaveLength(1)
+      expect(layers[0].name).toBe("Default")
+      expect(layers[0].serviceName).toBe("Service")
+    })
+
+    it("handles layers with very long multi-line type annotations (interviews pattern)", () => {
+      const content = `
+export const Default: Layer.Layer<
+  ChatService,
+  never,
+  | ConversationPrompts
+  | Context.Tag.Identifier<typeof ConversationTraits>
+  | Anthropic
+  | MessageStore
+  | FileAttachmentService
+  | TaskService
+  | NotificationService
+> = Layer.scoped(
+  ChatService,
+  Effect.gen(function* () {
+    const prompts = yield* ConversationPrompts
+    const traits = yield* ConversationTraits
+    return { sendMessage: () => Effect.succeed(void 0) }
+  })
+)
+`
+      const layers = extractLayersFromContent(content, "src/services/ChatService.live.ts")
+
+      expect(layers).toHaveLength(1)
+      expect(layers[0].name).toBe("Default")
+      expect(layers[0].serviceName).toBe("ChatService")
     })
 
     it.skip("extracts dependencies from real layer files using type checker", () => {

@@ -14,6 +14,7 @@ import * as Graph from "effect/Graph"
 import * as Option from "effect/Option"
 import * as Order from "effect/Order"
 import * as ts from "typescript"
+import { formatAgentWithHints } from "../analyze-architecture"
 
 interface ServiceDefinition {
   readonly name: string
@@ -1024,7 +1025,7 @@ USAGE:
   bun run architecture <command> [directory] [options]
 
 COMMANDS:
-  analyze [directory]              Full dependency graph analysis (default directory: ./src)
+  analyze [directory] [flags]      Full dependency graph analysis (default directory: ./src)
   blast-radius <service> [dir]     Show blast radius (upstream/downstream) for a service
   common-ancestors <svc1> <svc2>   Find shared dependencies across services
   metrics [directory]              Show graph metrics only
@@ -1032,16 +1033,27 @@ COMMANDS:
   hot-services [directory]         Show services with ≥4 dependents
   help                             Show this help
 
+ANALYZE FLAGS:
+  --metrics                        Show graph metrics (density, diameter, average degree)
+  --domains                        Show domain boundaries via cut vertex analysis
+  --advanced                       Show advanced metrics (betweenness, clustering)
+  --warnings                       Show detailed warnings (redundant deps, hot services, wide services)
+  --workflows                      Show expanded workflow examples
+  --all                            Show all sections expanded (equivalent to all flags above)
+
 ARGUMENTS:
   directory                        Optional directory to analyze (defaults to ./src)
 
 OUTPUT:
   All commands output XML to stdout for agent consumption
+  By default, analyze shows collapsed hints - use flags to expand specific sections
 
 EXAMPLES:
-  bun run architecture analyze
-  bun run architecture analyze ./apps/ui/src
-  bun run architecture analyze .
+  bun run architecture analyze                              # Collapsed hints (default)
+  bun run architecture analyze --metrics                    # Show only metrics
+  bun run architecture analyze --all                        # Show everything
+  bun run architecture analyze --metrics --warnings         # Show metrics and warnings
+  bun run architecture analyze ./apps/ui/src --metrics      # Custom directory with metrics
   bun run architecture blast-radius TodoQueryService
   bun run architecture common-ancestors SidebarVM DetailPanelVM
 `
@@ -1062,13 +1074,25 @@ const main = Effect.gen(function* () {
 
   switch (command) {
     case "analyze": {
-      if (args[1]) {
-        directory = args[1]
-        const customGraph = yield* buildArchitectureGraph(directory)
-        yield* Console.log(formatAgent(customGraph))
-      } else {
-        yield* Console.log(formatAgent(graph))
+      const flags = args.slice(1).filter(arg => arg.startsWith("--"))
+      const positional = args.slice(1).filter(arg => !arg.startsWith("--"))
+
+      if (positional[0]) {
+        directory = positional[0]
       }
+
+      const showAll = flags.includes("--all")
+      const options = {
+        showMetrics: showAll || flags.includes("--metrics"),
+        showDomains: showAll || flags.includes("--domains"),
+        showAdvanced: showAll || flags.includes("--advanced"),
+        showWarnings: showAll || flags.includes("--warnings"),
+        showWorkflows: showAll || flags.includes("--workflows")
+      }
+
+      const targetGraph = positional[0] ? yield* buildArchitectureGraph(directory) : graph
+
+      yield* Console.log(formatAgentWithHints(targetGraph, options))
       break
     }
 
