@@ -52,9 +52,10 @@ const analyzeCommand = Command.make(
     domains: Options.boolean("domains").pipe(Options.withDefault(false)),
     advanced: Options.boolean("advanced").pipe(Options.withDefault(false)),
     warnings: Options.boolean("warnings").pipe(Options.withDefault(false)),
+    workflows: Options.boolean("workflows").pipe(Options.withDefault(false)),
     all: Options.boolean("all").pipe(Options.withDefault(false))
   },
-  ({ metrics, domains, advanced, warnings, all }) =>
+  ({ metrics, domains, advanced, warnings, workflows, all }) =>
     runInProjectRoot((_root, analyzer) =>
       Effect.gen(function* () {
         const graph = yield* analyzer.buildArchitectureGraph
@@ -62,7 +63,8 @@ const analyzeCommand = Command.make(
           showMetrics: all || metrics,
           showDomains: all || domains,
           showAdvanced: all || advanced,
-          showWarnings: all || warnings
+          showWarnings: all || warnings,
+          showWorkflows: all || workflows
         })
         yield* Console.log(output)
       })

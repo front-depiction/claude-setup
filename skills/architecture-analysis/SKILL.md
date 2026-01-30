@@ -59,6 +59,7 @@ Full dependency graph analysis with progressive disclosure. By default shows cor
 - `--metrics`: Expand metrics section (density, diameter, average degree)
 - `--domains`: Expand domain analysis section (cut vertices, domain groupings)
 - `--advanced`: Expand advanced metrics (betweenness, clustering)
+- `--workflows`: Show full workflow details
 - `--all`: Expand all sections
 
 **Default Output (collapsed):** Core XML with:
@@ -68,6 +69,7 @@ Full dependency graph analysis with progressive disclosure. By default shows cor
 - metrics (collapsed by default, expandable with --metrics)
 - advanced_metrics (collapsed by default, expandable with --advanced)
 - domains (collapsed by default, expandable with --domains)
+- workflows (collapsed by default, expandable with --workflows)
 - warnings (architectural smells)
 - violations (circular dependencies, etc.)
 - debug (always shown - lists all commands with usage/examples)
@@ -534,6 +536,20 @@ Percentage of input services that depend on a shared dependency
 - Keep only if multiple future dependents expected
 
 ## Workflows
+
+Workflows are collapsed by default in the `analyze` command output. Use `--workflows` flag to expand.
+
+**Collapsed format:**
+```xml
+<workflows>
+  <workflow name="Impact Assessment"/>
+  <workflow name="Root Cause Analysis"/>
+  <workflow name="Architecture Health Check"/>
+  <workflow name="Domain Boundary Discovery"/>
+  <workflow name="Dependency Analysis"/>
+  Include "--workflows" to see all
+</workflows>
+```
 
 ### Workflow 1: Impact Assessment Before Change
 

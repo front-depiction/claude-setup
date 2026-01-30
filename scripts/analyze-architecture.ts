@@ -214,17 +214,8 @@ const extractLayerInfo = (
   if (!typeString.startsWith("Layer<")) return { dependencies: [], errorTypes: [] }
 
   const typeRef = type as ts.TypeReference
-  if (!typeRef.typeArguments && !(type as ts.TypeReference).target) {
-    const typeArgs = checker.getTypeArguments(typeRef)
-    if (typeArgs.length >= 3) {
-      return {
-        dependencies: extractDepsFromType(typeArgs[2], checker),
-        errorTypes: extractErrorTypeNames(typeArgs[1], checker)
-      }
-    }
-  }
-
   const typeArgs = checker.getTypeArguments(typeRef)
+
   if (typeArgs.length >= 3) {
     return {
       dependencies: extractDepsFromType(typeArgs[2], checker),
@@ -592,14 +583,17 @@ const groupServicesByType = (
     const inDeg = indegree.get(service.name) ?? 0
     const outDeg = outdegree.get(service.name) ?? 0
 
+    if (inDeg === 0 && outDeg === 0) {
+      orphans.push(service)
+      return
+    }
+
     if (service.name.endsWith("VM")) {
       vm.push(service)
       return
     }
 
-    if (inDeg === 0 && outDeg === 0) {
-      orphans.push(service)
-    } else if (outDeg === 0 && inDeg > 0) {
+    if (outDeg === 0 && inDeg > 0) {
       root.push(service)
     } else if (outDeg > 0 && inDeg === 0) {
       leaf.push(service)
@@ -664,7 +658,7 @@ export const formatHuman = (graph: ArchitectureGraph): string => {
   output.push(`[Root] ${rootNames}`)
   output.push("")
 
-  output.push("[Intermediate]")
+  output.push("[Mid]")
   grouped.intermediate.forEach((service) => {
     output.push(`${service.name} (${makeShortPath(service.path)})`)
     output.push(...renderExpandedTree(service.name, layerByService, analysisGraph))
@@ -917,36 +911,17 @@ const computeBetweennessCentrality = (analysisGraph: AnalysisGraph): Map<string,
       const distance = distanceMap.get(target)
       if (distance === undefined || distance === Infinity || distance <= 1) continue
 
-      const reconstructPath = (s: Graph.NodeIndex, t: Graph.NodeIndex): ReadonlyArray<Graph.NodeIndex> => {
-        const path: Graph.NodeIndex[] = []
-        let current = t
-        const visited = new Set<Graph.NodeIndex>()
+      const path = pathMap.get(target)
+      if (!path || path.length <= 2) continue
 
-        while (current !== s) {
-          if (visited.has(current)) break
-          visited.add(current)
-          path.unshift(current)
+      const intermediateNodes = path.slice(1, -1)
 
-          const intermediate = pathMap.get(current)
-          if (intermediate === undefined) break
-          current = intermediate
-        }
-
-        path.unshift(s)
-        return path
-      }
-
-      const path = reconstructPath(source, target)
-      if (path.length > 2) {
-        const intermediateNodes = path.slice(1, -1)
-
-        for (const nodeIndex of intermediateNodes) {
-          const nodeOption = Graph.getNode(analysisGraph.graph, nodeIndex)
-          if (Option.isSome(nodeOption)) {
-            const serviceName = nodeOption.value.name
-            const current = betweenness.get(serviceName) ?? 0
-            betweenness.set(serviceName, current + 1)
-          }
+      for (const nodeIndex of intermediateNodes) {
+        const nodeOption = Graph.getNode(analysisGraph.graph, nodeIndex)
+        if (Option.isSome(nodeOption)) {
+          const serviceName = nodeOption.value.name
+          const current = betweenness.get(serviceName) ?? 0
+          betweenness.set(serviceName, current + 1)
         }
       }
     }
@@ -1014,8 +989,7 @@ const countConnectedComponents = (
 
     componentCount++
     const walker = Graph.dfs(analysisGraph.graph, {
-      start: [startIndex],
-      direction: "undirected"
+      start: [startIndex]
     })
 
     for (const [idx] of walker) {
@@ -1381,8 +1355,7 @@ const detectCutVerticesAndDomains = (analysisGraph: AnalysisGraph): DomainAnalys
 
     const componentServices: string[] = []
     const walker = Graph.dfs(analysisGraph.graph, {
-      start: [startIndex],
-      direction: "undirected"
+      start: [startIndex]
     })
 
     for (const [idx, service] of walker) {
@@ -1626,7 +1599,7 @@ const renderMetrics = (metrics: GraphMetrics): string => {
     metrics.density < 0.4 ? "Moderate coupling (0.2-0.4 range)" :
     "Dense architecture with tight coupling (above 0.4 threshold)"
 
-  sections.push(`  <density value="${metrics.density.toFixed(3)}" status="${densityStatus}">${densityMessage}</density>`)
+  sections.push(`  <density value="${metrics.density.toFixed(3)}" status="${densityStatus}" description="${densityMessage}">${densityMessage}</density>`)
 
   const diameterStatus =
     metrics.diameter <= 3 ? "good" :
@@ -1638,7 +1611,7 @@ const renderMetrics = (metrics: GraphMetrics): string => {
     metrics.diameter <= 5 ? "Moderate depth (4-5 hops)" :
     "Deep dependency chains (>5 hops)"
 
-  sections.push(`  <diameter value="${metrics.diameter}" status="${diameterStatus}">${diameterMessage}</diameter>`)
+  sections.push(`  <diameter value="${metrics.diameter}" status="${diameterStatus}" description="${diameterMessage}">${diameterMessage}</diameter>`)
 
   const avgDegreeStatus =
     metrics.averageDegree < 2 ? "good" :
@@ -1650,7 +1623,7 @@ const renderMetrics = (metrics: GraphMetrics): string => {
     metrics.averageDegree < 4 ? "Moderate connectivity (2-4 connections per service)" :
     "High connectivity (≥4 connections per service)"
 
-  sections.push(`  <average_degree value="${metrics.averageDegree.toFixed(2)}" status="${avgDegreeStatus}">${avgDegreeMessage}</average_degree>`)
+  sections.push(`  <average_degree value="${metrics.averageDegree.toFixed(2)}" status="${avgDegreeStatus}" description="${avgDegreeMessage}">${avgDegreeMessage}</average_degree>`)
 
   sections.push("</metrics>")
   return sections.join("\n")
@@ -1716,7 +1689,83 @@ const renderAdvancedMetrics = (metrics: AdvancedMetrics): string => {
   return sections.join("\n")
 }
 
-const renderDebugSection = (): string => {
+const renderWorkflows = (expanded: boolean): string => {
+  const lines: string[] = []
+
+  if (expanded) {
+    lines.push("  <workflows>")
+
+    lines.push("    <workflow name=\"Impact Assessment\">")
+    lines.push("      <step>1. Run: architecture blast-radius ServiceName</step>")
+    lines.push("      <step>2. Check downstream count and risk level</step>")
+    lines.push("      <step>3. Review affected services by depth</step>")
+    lines.push("      <step>4. Plan testing strategy based on risk</step>")
+    lines.push("    </workflow>")
+
+    lines.push("    <workflow name=\"Root Cause Analysis\">")
+    lines.push("      <step>1. Identify all failing services</step>")
+    lines.push("      <step>2. Run: architecture common-ancestors Service1 Service2 Service3</step>")
+    lines.push("      <step>3. Check dependencies with 100% coverage (all services depend on it)</step>")
+    lines.push("      <step>4. Investigate top root cause candidate first</step>")
+    lines.push("      <step>5. Check recent changes to identified dependency</step>")
+    lines.push("    </workflow>")
+
+    lines.push("    <workflow name=\"Architecture Health Check\">")
+    lines.push("      <step>1. Run: architecture metrics</step>")
+    lines.push("      <step>2. Check density (should be less than 0.2 for good coupling)</step>")
+    lines.push("      <step>3. Check diameter (should be less than or equal to 3 for shallow chains)</step>")
+    lines.push("      <step>4. Run: architecture analyze --all for full analysis if metrics are concerning</step>")
+    lines.push("    </workflow>")
+
+    lines.push("    <workflow name=\"Domain Discovery\">")
+    lines.push("      <step>1. Run: architecture domains</step>")
+    lines.push("      <step>2. Identify domain bridges (cut vertices)</step>")
+    lines.push("      <step>3. Review domain groupings</step>")
+    lines.push("      <step>4. Consider package splits along domain boundaries</step>")
+    lines.push("    </workflow>")
+
+    lines.push("    <workflow name=\"Debugging Cascading Failures\">")
+    lines.push("      <step>1. List all failing services</step>")
+    lines.push("      <step>2. Run: architecture common-ancestors Service1 Service2 ...</step>")
+    lines.push("      <step>3. Identify shared dependencies with highest coverage</step>")
+    lines.push("      <step>4. Check logs and recent changes for root cause candidates</step>")
+    lines.push("      <step>5. Verify fix propagates to all affected services</step>")
+    lines.push("    </workflow>")
+
+    lines.push("    <workflow name=\"Hot Service Investigation\">")
+    lines.push("      <step>1. Run: architecture hot-services</step>")
+    lines.push("      <step>2. For each hot service, run: architecture blast-radius ServiceName</step>")
+    lines.push("      <step>3. Assess test coverage and stability requirements</step>")
+    lines.push("      <step>4. Document breaking change process for high-risk services</step>")
+    lines.push("      <step>5. Consider interface versioning or deprecation strategies</step>")
+    lines.push("    </workflow>")
+
+    lines.push("    <workflow name=\"Identifying Architectural Smells\">")
+    lines.push("      <step>1. Run: architecture analyze --all</step>")
+    lines.push("      <step>2. Check metrics: density &gt;0.4, diameter &gt;5, avg degree &gt;4</step>")
+    lines.push("      <step>3. Review advanced metrics for high betweenness (god services)</step>")
+    lines.push("      <step>4. Check warnings section for redundant deps and wide services</step>")
+    lines.push("      <step>5. Prioritize refactoring based on risk and impact</step>")
+    lines.push("    </workflow>")
+
+    lines.push("  </workflows>")
+  } else {
+    lines.push("  <workflows>")
+    lines.push("    <workflow name=\"Impact Assessment\"/>")
+    lines.push("    <workflow name=\"Root Cause Analysis\"/>")
+    lines.push("    <workflow name=\"Architecture Health Check\"/>")
+    lines.push("    <workflow name=\"Domain Discovery\"/>")
+    lines.push("    <workflow name=\"Debugging Cascading Failures\"/>")
+    lines.push("    <workflow name=\"Hot Service Investigation\"/>")
+    lines.push("    <workflow name=\"Identifying Architectural Smells\"/>")
+    lines.push("    Include \"--workflows\" to see all")
+    lines.push("  </workflows>")
+  }
+
+  return lines.join("\n")
+}
+
+const renderDebugSection = (showWorkflows: boolean): string => {
   const lines: string[] = []
 
   lines.push("<debug>")
@@ -1783,38 +1832,9 @@ const renderDebugSection = (): string => {
 
   lines.push("  </available_commands>")
   lines.push("  ")
-  lines.push("  <workflows>")
 
-  lines.push("    <workflow name=\"Impact Assessment\">")
-  lines.push("      <step>1. Run: architecture blast-radius ServiceName</step>")
-  lines.push("      <step>2. Check downstream count and risk level</step>")
-  lines.push("      <step>3. Review affected services by depth</step>")
-  lines.push("      <step>4. Plan testing strategy based on risk</step>")
-  lines.push("    </workflow>")
+  lines.push(renderWorkflows(showWorkflows))
 
-  lines.push("    <workflow name=\"Root Cause Analysis\">")
-  lines.push("      <step>1. Identify all failing services</step>")
-  lines.push("      <step>2. Run: architecture common-ancestors Service1 Service2 Service3</step>")
-  lines.push("      <step>3. Check dependencies with 100% coverage (all services depend on it)</step>")
-  lines.push("      <step>4. Investigate top root cause candidate first</step>")
-  lines.push("      <step>5. Check recent changes to identified dependency</step>")
-  lines.push("    </workflow>")
-
-  lines.push("    <workflow name=\"Architecture Health Check\">")
-  lines.push("      <step>1. Run: architecture metrics</step>")
-  lines.push("      <step>2. Check density (should be less than 0.2 for good coupling)</step>")
-  lines.push("      <step>3. Check diameter (should be less than or equal to 3 for shallow chains)</step>")
-  lines.push("      <step>4. Run: architecture analyze --all for full analysis if metrics are concerning</step>")
-  lines.push("    </workflow>")
-
-  lines.push("    <workflow name=\"Domain Discovery\">")
-  lines.push("      <step>1. Run: architecture domains</step>")
-  lines.push("      <step>2. Identify domain bridges (cut vertices)</step>")
-  lines.push("      <step>3. Review domain groupings</step>")
-  lines.push("      <step>4. Consider package splits along domain boundaries</step>")
-  lines.push("    </workflow>")
-
-  lines.push("  </workflows>")
   lines.push("</debug>")
 
   return lines.join("\n")
@@ -1853,6 +1873,7 @@ interface RenderOptions {
   readonly showDomains: boolean
   readonly showAdvanced: boolean
   readonly showWarnings: boolean
+  readonly showWorkflows: boolean
 }
 
 export const formatAgentWithHints = (
@@ -1958,7 +1979,7 @@ export const formatAgentWithHints = (
   output.push(renderViolations(graph, analysisGraph))
   output.push("")
 
-  output.push(renderDebugSection())
+  output.push(renderDebugSection(options.showWorkflows))
   output.push("")
 
   output.push("</architecture>")

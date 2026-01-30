@@ -727,7 +727,7 @@ interface BlastRadiusResult {
 
 const groupByDepth = (
   analysisGraph: AnalysisGraph,
-  walker: Graph.NodeWalker<ServiceDefinition, void>,
+  walker: Graph.NodeWalker<ServiceDefinition>,
   startIdx: Graph.NodeIndex
 ): ReadonlyArray<{ readonly depth: number; readonly services: ReadonlyArray<string> }> => {
   const depthMap = new Map<Graph.NodeIndex, number>()

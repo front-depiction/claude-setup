@@ -1,4 +1,4 @@
-import { testWritePattern } from "../../test/pattern-test-harness.ts"
+import { testWritePattern } from "../../test/pattern-test-harness"
 
 testWritePattern({
   name: "write-env-file",

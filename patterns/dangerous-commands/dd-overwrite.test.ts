@@ -1,4 +1,4 @@
-import { testBashPattern } from "../../test/pattern-test-harness.ts"
+import { testBashPattern } from "../../test/pattern-test-harness"
 
 testBashPattern({
   name: "dd-overwrite",

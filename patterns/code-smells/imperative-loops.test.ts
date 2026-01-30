@@ -1,4 +1,4 @@
-import { testPattern } from "../../test/pattern-test-harness.ts"
+import { testPattern } from "../../test/pattern-test-harness"
 
 testPattern({
   name: "imperative-loops",
