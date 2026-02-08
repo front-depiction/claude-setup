@@ -26,6 +26,38 @@ need(filesystem) → FileSystem
 need(http)       → HttpClient
 </effect-thinking>
 
+<layer-memoization>
+-- MemoMap := Map<Layer (by ===), [Effect, Finalizer]>
+-- one MemoMap per ManagedRuntime.make, shared across entire build
+
+-- Layer.provide(A, B) / Layer.merge(A, B) store ref(A), ref(B)
+-- MemoMap recurses into sub-layers, each resolved by its own ref
+-- same imported const = same ref = built exactly once per runtime
+
+-- THEREFORE:
+-- provide(VM₁, SvcLive) ∧ provide(VM₂, SvcLive) → SvcLive built once
+-- no "shared bundle" needed — MemoMap deduplicates by reference
+
+-- anti-pattern: intermediate bundles to force sharing
+-- ✗ Bundle = mergeAll(A, B, C) → provide(X, Bundle)
+--   unnecessary intermediates, bloated tree, harder to reason about
+-- ✓ provide(X, A, B) ∧ provide(Y, A, C) → shared A, separate B/C
+
+-- minimize R on exported layers
+-- push Layer.provide inside .live.ts → export Layer<Svc, E, ∅>
+-- consumer sees zero or minimal requirements
+-- dependency tree stays flat and auditable
+
+-- ¬fear(duplication) ∧ ¬fear(split-world)
+-- two subsystems with separate instances = fine
+-- MemoMap sharing is opt-in (same ref), not a global constraint
+-- Layer.fresh(L) → explicit opt-out, always rebuilds
+
+flat Layer.provide     over  intermediate "Deps" bundles
+pre-wired exports      over  leaking requirements to consumers
+separate instances     over  forced sharing across boundaries
+</layer-memoization>
+
 <uncertainty>
 unclear(requirements) → ask(user) → proceed
 ambiguous(approach) → present({options, tradeoffs}) → await(decision)
@@ -44,7 +76,6 @@ act(training-only) := violation
 <gates>
 gates(typecheck, test) := DELEGATE(agent) ∧ ¬run-directly(orchestrator)
 significant(changes)   := |files| > 1 ∨ architectural(impact)
-significant(changes)   → /legal-review before finalize
 </gates>
 
 <commands>
@@ -129,6 +160,19 @@ forbidden := {
 
 correctness ≠ "works"
 correctness := conditions(works) ∧ behavior(¬conditions)
+
+-- correct code > passing types > passing tests
+-- types and tests are evidence of correctness, not correctness itself
+-- cheating either gate = worse than failing it
+
+bypass(types) := { as any, as unknown, @ts-ignore, @ts-expect-error }
+bypass(types) → forbidden — fix the code, not the type system
+
+test(implementation) := ∅  — empty pattern, proves nothing
+test(behavior)       := meaningful
+-- tests verify WHAT the system does, never HOW it does it
+-- testing implementation = testing you wrote what you wrote
+-- refactor-safe tests only: change internals, tests still pass
 </code-field>
 
 </claude-guidelines>
