@@ -11,6 +11,9 @@
 import { Effect, Console, Context, Layer, Data, Schema, pipe, Config, Array as Arr } from "effect"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Command, CommandExecutor } from "@effect/platform"
+import * as fs from "fs"
+import * as path from "path"
+import * as os from "os"
 
 // ============================================================================
 // Schemas & Types
@@ -35,6 +38,28 @@ const formatMiseTasks = (tasks: typeof MiseTasks.Type): string =>
     const aliases = t.aliases.length > 0 ? ` (${t.aliases.join(", ")})` : ""
     return `${t.name}${aliases}: ${t.description}`
   }).join("\n")
+
+const listMemories = (): string => {
+  const vaultPath = path.join(os.homedir(), '.claude', 'memory')
+
+  try {
+    if (!fs.existsSync(vaultPath)) {
+      return 'No memories found (vault not initialized).'
+    }
+
+    const files = fs.readdirSync(vaultPath)
+      .filter(f => f.endsWith('.md'))
+      .slice(0, 10)
+
+    if (files.length === 0) {
+      return 'Memory vault exists but is empty.'
+    }
+
+    return files.map(f => `  - ${f.replace('.md', '')}`).join('\n')
+  } catch (error) {
+    return 'Error listing memories.'
+  }
+}
 
 export class AgentConfigError extends Data.TaggedError("AgentConfigError")<{
   readonly reason: string
@@ -567,9 +592,23 @@ ${githubPRs ? `<open-prs>\n${githubPRs}\n</open-prs>` : "<open-prs>(none)</open-
 
 ${moduleSummary}
 <module-discovery>
-Run /module [path] to get full context for any module listed above.
-Run /module-search [pattern] to find modules by keyword.
+HIGHLY RECOMMENDED: Explore available modules - they contain distilled knowledge about the codebase.
+- /modules - See what knowledge modules exist
+- /module [path] - Get comprehensive context for a specific module
+- /module-search [pattern] - Find relevant modules by keyword
+
+Module context files save you from re-discovering architecture, patterns, and domain knowledge.
+Use them proactively before diving into code.
+
+Consider using /memory-management to query past decisions, store new learnings, and search across sessions.
 </module-discovery>
+
+<available-memories>
+Recent memories in vault:
+${listMemories()}
+
+Use /memory-management to query, create, or search memories.
+</available-memories>
 
 <architecture>
 ${architectureGraph}
@@ -882,9 +921,23 @@ ${architectureGraph}
 
 ${moduleSummary}
 <module-discovery>
-Run /module [path] to get full context for any module listed above.
-Run /module-search [pattern] to find modules by keyword.
+HIGHLY RECOMMENDED: Explore available modules - they contain distilled knowledge about the codebase.
+- /modules - See what knowledge modules exist
+- /module [path] - Get comprehensive context for a specific module
+- /module-search [pattern] - Find relevant modules by keyword
+
+Module context files save you from re-discovering architecture, patterns, and domain knowledge.
+Use them proactively before diving into code.
+
+Consider using /memory-management to query past decisions, store new learnings, and search across sessions.
 </module-discovery>
+
+<available-memories>
+Recent memories in vault:
+${listMemories()}
+
+Use /memory-management to query, create, or search memories.
+</available-memories>
 
 <git-status>
 ${gitStatus || "(clean)"}
