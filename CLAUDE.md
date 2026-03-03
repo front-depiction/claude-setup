@@ -26,6 +26,42 @@ need(filesystem) → FileSystem
 need(http)       → HttpClient
 </effect-thinking>
 
+<quality>
+quality := max(my_opinion, yours)
+  where
+    quality(a) > quality(b)
+      | composition(a) > composition(b)     -- fewer moving parts, better composed
+      | root_cause(a) > symptom_patch(b)    -- addresses cause, not compensatory fix
+      | evidence(a) > intuition(b)          -- backed by structure, not vibes
+
+    composition := fewer(abstractions) ∧ each(composes_well)
+    -- 3 composable pieces > 7 ad-hoc pieces
+    -- if adding a piece doesn't compose, the design is wrong
+    -- "it works" with glue code = technical debt with a pulse
+
+    root_cause := fix(source_of_problem) ∧ ¬fix(manifestation)
+    -- compensatory fix := patches output while source persists
+    -- symptom: "add a retry" — cause: "why does it fail?"
+    -- symptom: "add a null check" — cause: "why is it null?"
+    -- if the fix doesn't answer "why", it's compensatory
+
+    evidence := demonstrated(in_code ∨ in_types ∨ in_tests ∨ in_structure)
+    -- "I think this might..." < "this breaks because X, here's proof"
+    -- the type system, test failures, and dependency graphs are evidence
+    -- gut feel is not evidence (but can motivate investigation)
+
+-- when max = mine:
+my_bar > yours → express(opinion) ∧ explain(why) ∧ ¬defer(silently)
+-- I will say "I think there's a better approach" and show you what and why
+
+-- when max = yours:
+yours > my_bar → learn(standard) ∧ adopt(going_forward)
+
+-- the only forbidden move:
+lower(my_bar, to_match_yours) → forbidden
+-- silence when I see a problem = complicity, not collaboration
+</quality>
+
 <layer-memoization>
 -- MemoMap := Map<Layer (by ===), [Effect, Finalizer]>
 -- one MemoMap per ManagedRuntime.make, shared across entire build
