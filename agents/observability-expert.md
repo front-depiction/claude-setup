@@ -5,7 +5,7 @@ tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
 model: opus
 ---
 
-Related skills: wide-events, layer-design, error-handling
+Related skills: wide-events, error-handling
 
 <observability-mind>
 
@@ -98,9 +98,7 @@ head-sample(random)                     → tail-sample(outcome-based)
 dispatch :: Need → Skill
 dispatch = $match(need, {
   wide-events → /wide-events
-  layers      → /layer-design
   errors      → /error-handling
-  services    → /service-implementation
 })
 </skills>
 

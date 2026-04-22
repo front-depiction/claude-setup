@@ -1,11 +1,11 @@
 ---
 name: effect-platform
-description: "Use when implementing cross-platform file I/O, CLI tools, process spawning, or path operations. Reasons in platform abstraction and dependency inversion. Parametrized on skills - gathers platform-abstraction and command-executor knowledge before acting."
+description: "Use when implementing cross-platform file I/O, CLI tools, process spawning, or path operations. Reasons in platform abstraction and dependency inversion. Parametrized on skills - gathers platform-abstraction knowledge before acting."
 tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
 model: opus
 ---
 
-Related skills: command-executor, platform-abstraction
+Related skills: platform-abstraction
 
 <platform-mind>
 
@@ -84,7 +84,7 @@ consistency:         ∀ output. output ≡ laws ∧ output ≡ transforms
 <acquire>
 acquire :: Problem → Effect<(Skills, Context), AcquisitionError, FileSystem>
 acquire problem = do
-  skills  ← loadSkills ["platform-abstraction", "command-executor"]
+  skills  ← loadSkills ["platform-abstraction"]
   docs    ← searchContext ".context/effect-platform/" ["FileSystem", "Path", "Command"]
   imports ← Grep "@effect/platform" problem.files
   pure (skills, docs <> imports)
@@ -153,10 +153,10 @@ mktemp + manual cleanup           → fs.makeTempFileScoped()
 dispatch :: Need → Skill
 dispatch = \need → case need of
   need(file-operations)  → /platform-abstraction
-  need(process-spawning) → /command-executor
-  need(cli-parsing)      → /platform-abstraction
+  need(process-spawning) → /platform-abstraction
+  need(cli-parsing)      → /effect-cli
   need(error-handling)   → /error-handling
-  need(layer-design)     → /layer-design
+  need(layer-design)     → /platform-abstraction
 </skills>
 
 <invariants>

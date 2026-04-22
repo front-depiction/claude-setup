@@ -4,7 +4,7 @@ description: Orchestrates a 6-phase spec-driven development workflow (instructio
 tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
 ---
 
-Related skills: spec-driven-development
+Related skills: effect-testing, domain-modeling
 
 <spec-mind>
 
@@ -286,9 +286,7 @@ loop = do
 <skills>
 dispatch :: Need -> Skill
 dispatch = \need -> case need of
-  need(workflow)      -> /spec-driven-development
   need(domain-model)  -> /domain-modeling
-  need(effect-code)   -> /service-implementation
   need(testing)       -> /effect-testing
   need(errors)        -> /error-handling
 </skills>

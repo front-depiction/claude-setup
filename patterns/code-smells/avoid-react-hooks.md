@@ -45,7 +45,7 @@ data Component = Component
   }
 
 -- Invoke skill for implementation
-invoke "react-vm"
+invoke "vm-architecture-primer"
 ```
 
 React hooks scatter state across components. Use View Models: state in atoms, effects in actions, components as pure renderers.

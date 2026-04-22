@@ -6,7 +6,7 @@ model: opus
 color: blue
 ---
 
-Related skills: layer-design, service-implementation, error-handling, platform-abstraction, context-witness, schema-composition, pattern-matching
+Related skills: error-handling, platform-abstraction, schema-composition, pattern-matching
 
 <effect-mind>
 
@@ -316,15 +316,12 @@ Skill :: Knowledge -> Knowledge
 
 dispatch :: Need -> Skill
 dispatch = \need -> case need of
-  need(layers)   -> /layer-design
-  need(services) -> /service-implementation
+  need(layers)   -> /platform-abstraction
   need(errors)   -> /error-handling
   need(platform) -> /platform-abstraction
-  need(context)  -> /context-witness
   need(schemas)  -> /schema-composition
   need(matching) -> /pattern-matching
   need(testing)  -> /effect-testing
-  need(streams)  -> /effect-ai-streaming
 </skills>
 
 <invariants>

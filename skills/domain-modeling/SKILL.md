@@ -1,6 +1,6 @@
 ---
 name: domain-modeling
-description: Create production-ready Effect domain models using Schema.TaggedStruct for ADTs, Schema.Data for automatic equality, with comprehensive predicates, orders, guards, and match functions. Use when modeling domain entities, value objects, or any discriminated union types.
+description: Create production-ready Effect domain models using Schema.TaggedStruct for ADTs, Schema.Data for automatic equality, with comprehensive predicates, orders, equivalences, typeclass-derived guards, and match functions. Use when modeling domain entities, value objects, discriminated union types, or generating Equivalence/Order/predicate instances for domain types.
 ---
 
 # Effect Domain Modeling Skill
@@ -1116,3 +1116,146 @@ export const setName: {
 10. **Equal.equals()** - Primary equality check (from Schema.Data)
 
 Your domain models should be production-ready, type-safe, and provide excellent developer experience.
+
+---
+
+## Predicates
+
+Generate complete sets of predicates and Equivalence / Order instances for domain types, derived from typeclass implementations.
+
+### Equality with Schema.Data
+
+When using schemas, leverage `Schema.Data` for automatic structural equality:
+
+```typescript
+import { Schema, Equal, DateTime } from "effect"
+
+export const Task = Schema.TaggedStruct("pending", {
+  id: Schema.String,
+  createdAt: Schema.DateTimeUtcFromSelf,
+}).pipe(Schema.Data) // Implements Equal.Symbol automatically
+
+// Usage: Automatic structural equality
+const areSame = Equal.equals(task1, task2) // true if same structure
+```
+
+### Equivalence from Schema
+
+When you need an `Equivalence` instance for use with combinators, derive from the schema:
+
+```typescript
+import { Schema, Array } from "effect"
+import * as Equivalence from "effect/Equivalence"
+
+export const TaskEquivalence = Schema.equivalence(Task)
+
+// Usage with combinators
+const uniqueTasks = Array.dedupeWith(tasks, TaskEquivalence)
+```
+
+### Field-Based Equivalence with Equivalence.mapInput
+
+```typescript
+import * as Equivalence from "effect/Equivalence"
+
+// Signature: Equivalence.mapInput(baseEquivalence, (value) => extractField)
+export const EquivalenceById = Equivalence.mapInput(
+  Equivalence.string,
+  (task: Task) => task.id
+)
+
+export const EquivalenceByTag = Equivalence.mapInput(
+  Equivalence.string,
+  (task: Task) => task._tag
+)
+```
+
+### Combining Equivalences
+
+```typescript
+// Equivalence.combine: all must match (AND logic); order doesn't matter
+export const EquivalenceByTagAndId = Equivalence.combine(
+  EquivalenceByTag,
+  EquivalenceById
+)
+```
+
+## Orders
+
+### Order Instances with Order.mapInput
+
+```typescript
+import * as Order from "effect/Order"
+import { DateTime } from "effect"
+
+// Signature: Order.mapInput(baseOrder, (value) => extractField)
+export const OrderById: Order.Order<Task> =
+  Order.mapInput(Order.string, (task: Task) => task.id)
+
+export const OrderByCreatedAt: Order.Order<Task> =
+  Order.mapInput(DateTime.Order, (task: Task) => task.createdAt)
+
+export const OrderByPriority: Order.Order<Task> =
+  Order.mapInput(Order.number, (task: Task) => {
+    const priorities = { pending: 0, active: 1, completed: 2 }
+    return priorities[task._tag]
+  })
+```
+
+### Combining Orders
+
+```typescript
+// Order.combine: first order takes precedence, then second, etc.
+// Order matters (unlike Equivalence.combine)
+export const OrderByPriorityThenDate: Order.Order<Task> = Order.combine(
+  OrderByPriority,
+  OrderByCreatedAt
+)
+```
+
+## Guards
+
+When a domain type implements a typeclass, re-export all relevant predicates derived from it:
+
+```typescript
+// Typeclass instances give you predicates for free
+export const Schedulable = Schedulable$.make<Appointment>(
+  (self) => self.date,
+  (self, date) => Appointment.make({ ...self, date: DateTime.toUtc(date) })
+)
+
+// Re-export all derived predicates
+export const isScheduledBefore = Schedulable$.isScheduledBefore(Schedulable)
+export const isScheduledAfter = Schedulable$.isScheduledAfter(Schedulable)
+export const isScheduledBetween = Schedulable$.isScheduledBetween(Schedulable)
+export const isScheduledToday = Schedulable$.isScheduledToday(Schedulable)
+export const isScheduledThisWeek = Schedulable$.isScheduledThisWeek(Schedulable)
+export const isScheduledThisMonth = Schedulable$.isScheduledThisMonth(Schedulable)
+```
+
+## Checklist for Complete Coverage
+
+### Equality
+- [ ] Use `Schema.Data` for automatic `Equal.equals()`
+- [ ] Export `Schema.equivalence()` when needed for combinators
+- [ ] Export field-based equivalences via `Equivalence.mapInput`
+- [ ] Export combined equivalences via `Equivalence.combine`
+
+### Orders
+- [ ] Export orders for all sortable fields via `Order.mapInput`
+- [ ] Export combined orders via `Order.combine`
+- [ ] Document which field takes precedence in combined orders
+
+### Schedulable types
+- [ ] isScheduledBefore / isScheduledAfter / isScheduledBetween
+- [ ] isScheduledOn / isScheduledToday / isScheduledThisWeek / isScheduledThisMonth
+- [ ] All Order instances (time, day, month, etc.)
+
+### Durable types
+- [ ] hasMinimumDuration / hasMaximumDuration / hasDurationBetween / hasExactDuration
+- [ ] All Order instances (duration, hours, minutes)
+
+### Domain-specific fields
+- [ ] Predicate for each variant (isPending, isActive, etc.)
+- [ ] Order by field value via `Order.mapInput`
+- [ ] Combined orders for common sorting patterns

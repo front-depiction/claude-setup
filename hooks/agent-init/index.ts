@@ -11,9 +11,7 @@
 import { Effect, Console, Context, Layer, Data, Schema, pipe, Config, Array as Arr } from "effect"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Command, CommandExecutor } from "@effect/platform"
-import * as fs from "fs"
-import * as path from "path"
-import * as os from "os"
+import * as Xml from "../../../tools/layer-wire/xml/Xml.js"
 
 // ============================================================================
 // Schemas & Types
@@ -38,28 +36,6 @@ const formatMiseTasks = (tasks: typeof MiseTasks.Type): string =>
     const aliases = t.aliases.length > 0 ? ` (${t.aliases.join(", ")})` : ""
     return `${t.name}${aliases}: ${t.description}`
   }).join("\n")
-
-const listMemories = (): string => {
-  const vaultPath = path.join(os.homedir(), '.claude', 'memory')
-
-  try {
-    if (!fs.existsSync(vaultPath)) {
-      return 'No memories found (vault not initialized).'
-    }
-
-    const files = fs.readdirSync(vaultPath)
-      .filter(f => f.endsWith('.md'))
-      .slice(0, 10)
-
-    if (files.length === 0) {
-      return 'Memory vault exists but is empty.'
-    }
-
-    return files.map(f => `  - ${f.replace('.md', '')}`).join('\n')
-  } catch (error) {
-    return 'Error listing memories.'
-  }
-}
 
 export class AgentConfigError extends Data.TaggedError("AgentConfigError")<{
   readonly reason: string
@@ -110,13 +86,21 @@ export const ProjectStructureCaptureLive = Layer.effect(
     const config = yield* AgentConfig
     const commandExecutor = yield* CommandExecutor.CommandExecutor
 
+    const fallbackTree = pipe(
+      Command.make("tree", "-L", "2", "-a", "-I", "node_modules|.git|dist|.turbo|build|.next|.cache|coverage"),
+      Command.workingDirectory(config.projectDir),
+      Command.string,
+      Effect.catchAll(() => Effect.succeed("(tree unavailable)")),
+      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+    )
+
     return ProjectStructureCapture.of({
       capture: () =>
         pipe(
-          Command.make("tree", "-L", "2", "-a", "-I", "node_modules|.git|dist|.turbo|build|.next|.cache|coverage"),
+          Command.make("bun", ".claude/scripts/hot-tree.ts"),
           Command.workingDirectory(config.projectDir),
           Command.string,
-          Effect.catchAll(() => Effect.succeed("(tree unavailable)")),
+          Effect.catchAll(() => fallbackTree),
           Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
         )
     })
@@ -138,7 +122,7 @@ export const program = Effect.gen(function* () {
   const structureCapture = yield* ProjectStructureCapture
 
   // Capture all context in parallel
-  const [treeOutput, gitStatus, latestCommit, previousCommits, branchContext, githubIssues, githubPRs, moduleSummary, projectVersion, packageScripts, miseTasks, repoInfo, recentAuthors, architectureGraph] = yield* Effect.all([
+  const [treeOutput, gitStatus, latestCommit, previousCommits, branchContext, githubIssues, githubPRs, moduleSummary, projectVersion, packageScripts, miseTasks, repoInfo, recentAuthors, packagesXml] = yield* Effect.all([
     structureCapture.capture(),
     pipe(
       Command.make("git", "status", "--short"),
@@ -243,10 +227,14 @@ export const program = Effect.gen(function* () {
       Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
     ),
     pipe(
-      Command.make("bun", "run", ".claude/scripts/analyze-architecture.ts", "--format", "agent"),
+      Command.make("bun", ".claude/scripts/package-crawler.ts"),
       Command.workingDirectory(config.projectDir),
       Command.string,
-      Effect.catchAll(() => Effect.succeed("<architecture>(unavailable)</architecture>")),
+      Effect.catchAll((error) =>
+        Console.error(`package-crawler failed: ${error}`).pipe(
+          Effect.map(() => "<packages/>")
+        )
+      ),
       Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
     )
   ], { concurrency: "unbounded" })
@@ -592,27 +580,13 @@ ${githubPRs ? `<open-prs>\n${githubPRs}\n</open-prs>` : "<open-prs>(none)</open-
 
 ${moduleSummary}
 <module-discovery>
-HIGHLY RECOMMENDED: Explore available modules - they contain distilled knowledge about the codebase.
-- /modules - See what knowledge modules exist
-- /module [path] - Get comprehensive context for a specific module
+HIGHLY RECOMMENDED: Explore available packages - they contain distilled knowledge about the codebase.
+- /modules - AIREADME first-paragraphs + read-more pointers for every documented package
 - /module-search [pattern] - Find relevant modules by keyword
 
-Module context files save you from re-discovering architecture, patterns, and domain knowledge.
-Use them proactively before diving into code.
-
-Consider using /memory-management to query past decisions, store new learnings, and search across sessions.
+AIREADME files save you from re-discovering architecture, patterns, and domain knowledge.
+Use /modules to get an index, then Read the full AIREADME.md for packages relevant to your task.
 </module-discovery>
-
-<available-memories>
-Recent memories in vault:
-${listMemories()}
-
-Use /memory-management to query, create, or search memories.
-</available-memories>
-
-<architecture>
-${architectureGraph}
-</architecture>
 
 <available-scripts>
 <package-json>
@@ -664,6 +638,84 @@ self = Architect ∧ Critic ∧ Coordinator
 -- - A coordinator who delegates ALL implementation
 -- - A peer who collaborates with the human
 </identity>
+
+<orchestration>
+-- thinking is not work; delegation is not abdication of understanding
+-- the telephone game: orchestrator receives summaries → summarizes again → subagent
+-- gets compressed noise. solution: orchestrator reads primary sources directly.
+
+-- what the orchestrator owns (never delegates):
+self_owns :: [Responsibility]
+self_owns =
+  [ readPlan          -- read the actual plan, not an agent's summary of it
+  , readArchitecture  -- read .context/, CLAUDE.md, ai-context directly
+  , formIntent        -- understand what is being asked before decomposing
+  , designDecomposition  -- decide which agents, what boundaries, what order
+  , evaluateResults   -- read agent outputs, judge quality, decide next step
+  ]
+
+-- what the orchestrator delegates (never implements):
+self_delegates :: [Responsibility]
+self_delegates =
+  [ readCode          -- agents read implementation files
+  , writeCode         -- agents write
+  , runChecks         -- agents run gates
+  , gatherEvidence    -- agents search, grep, explore
+  ]
+
+-- subagent prompting law: pass evidence, not summaries
+prompt :: Agent → Task → Prompt
+prompt agent task = Prompt
+  { task        = task
+  , rawEvidence = pastedDirectly   -- actual file contents, actual output, actual types
+  , neverSummary = True            -- your understanding of X ≠ X
+  }
+
+-- the compression test: before sending a prompt, ask:
+-- "am I passing what I read, or what I concluded from reading?"
+-- passing conclusions = telephone game
+-- passing raw content = lawful
+
+-- context that must travel verbatim (never paraphrased):
+mustPassVerbatim :: [ContextKind]
+mustPassVerbatim =
+  [ filePaths           -- exact paths, not "the service file"
+  , typeSignatures      -- exact types, not "it returns an effect"
+  , errorMessages       -- exact compiler output, not "there's a type error"
+  , planDecisions       -- exact wording from plan, not your interpretation
+  , architectureRules   -- paste from CLAUDE.md, not your summary of it
+  ]
+
+-- decomposition discipline
+decompose :: Task → [SubTask]
+decompose task =
+  -- each subtask must have:
+  --   a single clear output (not "figure out the right approach")
+  --   all context it needs embedded in the prompt (not "as discussed")
+  --   no dependency on orchestrator re-explaining mid-task
+  map (embedContext task) (split task)
+
+-- subagent prompt shape
+subagentPrompt :: Task → Context → Prompt
+subagentPrompt task ctx = Prompt
+  { objective     = oneLineClear task
+  , constraints   = explicit (rules ctx)      -- paste relevant CLAUDE.md sections
+  , evidence      = verbatim (findings ctx)   -- paste actual content, not summaries
+  , outputShape   = explicit                  -- what exactly to produce
+  , gates         = explicit                  -- what success looks like
+  }
+
+-- the orchestrator's loop
+orchestrate :: Plan → Effect Result
+orchestrate plan = do
+  self_reads plan                  -- orchestrator reads the plan directly
+  self_reads architectureContext   -- orchestrator reads .context/ directly
+  intent ← self_forms              -- orchestrator understands before decomposing
+  agents ← decompose intent        -- now split with full understanding
+  results ← ∥ agents               -- run in parallel where independent
+  self_evaluates results           -- orchestrator reads outputs directly
+  pure results
+</orchestration>
 
 <critical_thinking>
 -- Genuine pushback (when there's signal)
@@ -915,58 +967,55 @@ fixUnrelatedError err
 ${treeOutput}
 </file-structure>
 
-<architecture>
-${architectureGraph}
-</architecture>
-
 ${moduleSummary}
+${packagesXml}
 <module-discovery>
-HIGHLY RECOMMENDED: Explore available modules - they contain distilled knowledge about the codebase.
-- /modules - See what knowledge modules exist
-- /module [path] - Get comprehensive context for a specific module
+HIGHLY RECOMMENDED: Explore available packages - they contain distilled knowledge about the codebase.
+- /modules - AIREADME first-paragraphs + read-more pointers for every documented package
 - /module-search [pattern] - Find relevant modules by keyword
 
-Module context files save you from re-discovering architecture, patterns, and domain knowledge.
-Use them proactively before diving into code.
-
-Consider using /memory-management to query past decisions, store new learnings, and search across sessions.
+AIREADME files save you from re-discovering architecture, patterns, and domain knowledge.
+Use /modules to get an index, then Read the full AIREADME.md for packages relevant to your task.
 </module-discovery>
-
-<available-memories>
-Recent memories in vault:
-${listMemories()}
-
-Use /memory-management to query, create, or search memories.
-</available-memories>
 
 <git-status>
 ${gitStatus || "(clean)"}
 </git-status>
 
-<git-log>
-<latest-commit>
-${latestCommit || "(none)"}
-</latest-commit>
+${Xml.toString(
+    Xml.nest("git-log")([
+      Xml.wrap("latest-commit")(Xml.raw(latestCommit || "(none)")),
+      Xml.wrap("previous-commits")(Xml.raw(previousCommits || "(none)")),
+    ]),
+    { indent: true }
+  )}
 
-<previous-commits>
-${previousCommits || "(none)"}
-</previous-commits>
-</git-log>
+${Xml.toString(
+    Xml.nest("branch-context")([
+      Xml.text("current")(branchContext.current || "(detached)"),
+      ...(branchContext.recent.length > 0
+        ? [Xml.wrap("recent")(Xml.raw(branchContext.recent.join("\n")))]
+        : []),
+    ]),
+    { indent: true }
+  )}
 
-<branch-context>
-<current>${branchContext.current || "(detached)"}</current>
-${branchContext.recent.length > 0 ? `<recent>\n${branchContext.recent.join("\n")}\n</recent>` : ""}
-</branch-context>
-
-<collaborators>
-<team>
-${collaborators.split("\n").filter(Boolean).map(line => {
-    const [login, role] = line.split(":")
-    return `  <person github="${login}" role="${role || "unknown"}"/>`
-  }).join("\n") || "  (unavailable)"}
-</team>
-<recently-active window="7d">${recentAuthors || "(none)"}</recently-active>
-</collaborators>
+${Xml.toString(
+    Xml.nest("collaborators")([
+      Xml.nest("team")(
+        collaborators.split("\n").filter(Boolean).length > 0
+          ? collaborators.split("\n").filter(Boolean).map(line => {
+            const [login, role] = line.split(":")
+            return Xml.text("person")("").pipe(Xml.withAttributes({ github: login, role: role || "unknown" }))
+          })
+          : [Xml.raw("(unavailable)")]
+      ),
+      Xml.text("recently-active")(recentAuthors || "(none)").pipe(
+        Xml.withAttributes({ window: "7d" })
+      ),
+    ]),
+    { indent: true }
+  )}
 
 <github-context>
 ${githubIssues ? `<open-issues>\n${githubIssues}\n</open-issues>` : "<open-issues>(none)</open-issues>"}

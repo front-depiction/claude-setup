@@ -478,16 +478,12 @@ contextRule spawn
   | otherwise = standardPrompt
 </SUBAGENT_PROMPTING>`)
 
-  parts.push(`<memory-and-modules>
-Manage memories via /memory-management, discover modules via /module.
-These tools condense knowledge in a memory-efficient manner.
-Prefer these over manual exploration and memory management.
+  parts.push(`<modules>
+Discover modules via /modules. Condenses knowledge in a memory-efficient manner.
 
-- /memory-management: Query, store, search persistent knowledge across sessions
-- /modules: List all ai-context modules with summaries
-- /module [path]: Get full context for specific module
+- /modules: List AIREADME first-paragraphs + read-more pointers for every AIREADME-bearing package
 - /module-search [pattern]: Find modules by keyword
-</memory-and-modules>`)
+</modules>`)
 
   // Always: Show version
   const commandExecutor = yield* CommandExecutor.CommandExecutor

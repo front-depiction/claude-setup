@@ -252,33 +252,33 @@ const summaryMode = Effect.gen(function* () {
   yield* Console.log(`<modules count="${count}">`)
 
   if (Array.isNonEmptyReadonlyArray(internal)) {
-    yield* Console.log(`<internal count="${Array.length(internal)}">`)
+    yield* Console.log(`  <internal count="${Array.length(internal)}">`)
     yield* pipe(
       internal,
-      Array.map(ctx => Console.log(`${ctx.path}: ${ctx.summary}`)),
+      Array.map(ctx => Console.log(`    ${ctx.path}: ${ctx.summary}`)),
       Effect.all,
       Effect.asVoid
     )
-    yield* Console.log("</internal>")
+    yield* Console.log("  </internal>")
   }
 
   if (totalExternal > 0) {
-    yield* Console.log(`<external count="${totalExternal}">`)
+    yield* Console.log(`  <external count="${totalExternal}">`)
     // External with ai-context.md (have summaries)
     yield* pipe(
       externalWithContext,
-      Array.map(ctx => Console.log(`${ctx.path}: ${ctx.summary}`)),
+      Array.map(ctx => Console.log(`    ${ctx.path}: ${ctx.summary}`)),
       Effect.all,
       Effect.asVoid
     )
     // External submodules without ai-context.md (just paths, for grepping)
     yield* pipe(
       externalWithoutContext,
-      Array.map(path => Console.log(`${path}: (grep for implementation details)`)),
+      Array.map(path => Console.log(`    ${path}: (grep for implementation details)`)),
       Effect.all,
       Effect.asVoid
     )
-    yield* Console.log("</external>")
+    yield* Console.log("  </external>")
   }
 
   yield* Console.log("</modules>")

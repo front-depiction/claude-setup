@@ -5,7 +5,7 @@ tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
 model: opus
 ---
 
-Related skills: react-vm, atom-state, react-composition
+Related skills: vm-architecture-primer
 
 <react-mind>
 
@@ -152,11 +152,10 @@ conditional-render   -> $match(state, handlers)
 <skills>
 dispatch :: Need -> Skill
 dispatch = \need -> case need of
-  need(vm-pattern)       -> /react-vm
-  need(atom-state)       -> /atom-state
-  need(composition)      -> /react-composition
+  need(vm-pattern)       -> /vm-architecture-primer
+  need(atom-state)       -> /vm-architecture-primer
+  need(composition)      -> /vm-architecture-primer
   need(state-machine)    -> /pattern-matching
-  need(effect-service)   -> /service-implementation
 </skills>
 
 <invariants>

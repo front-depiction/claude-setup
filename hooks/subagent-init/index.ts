@@ -15,9 +15,7 @@
 import { Effect, Console, Context, Layer, Data, Schema, pipe, Config, Array as Arr } from "effect"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Command, CommandExecutor } from "@effect/platform"
-import * as fs from "fs"
-import * as path from "path"
-import * as os from "os"
+import * as Xml from "../../../tools/layer-wire/xml/Xml.js"
 
 const AgentConfigSchema = Schema.Struct({
   projectDir: Schema.String.pipe(Schema.nonEmptyString()),
@@ -73,33 +71,11 @@ export const AppLive = AgentConfigLive.pipe(
   Layer.provideMerge(BunContext.layer)
 )
 
-function listMemories(): string {
-  const vaultPath = path.join(os.homedir(), '.claude', 'memory')
-
-  try {
-    if (!fs.existsSync(vaultPath)) {
-      return 'No memories found (vault not initialized).'
-    }
-
-    const files = fs.readdirSync(vaultPath)
-      .filter(f => f.endsWith('.md'))
-      .slice(0, 10)
-
-    if (files.length === 0) {
-      return 'Memory vault exists but is empty.'
-    }
-
-    return files.map(f => `  - ${f.replace('.md', '')}`).join('\n')
-  } catch (error) {
-    return 'Error listing memories.'
-  }
-}
-
 const program = Effect.gen(function* () {
   const config = yield* AgentConfig
   const commandExecutor = yield* CommandExecutor.CommandExecutor
 
-  const [moduleSummary, projectVersion, latestCommit, previousCommits, packageScripts, miseTasks] = yield* Effect.all([
+  const [moduleSummary, projectVersion, latestCommit, previousCommits, packageScripts, miseTasks, packagesXml] = yield* Effect.all([
     pipe(
       Command.make("bun", ".claude/scripts/context-crawler.ts", "--summary"),
       Command.workingDirectory(config.projectDir),
@@ -146,6 +122,17 @@ const program = Effect.gen(function* () {
       Effect.flatMap(s => Schema.decodeUnknown(MiseTasks)(JSON.parse(s))),
       Effect.map(formatMiseTasks),
       Effect.catchAll(() => Effect.succeed("")),
+      Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
+    ),
+    pipe(
+      Command.make("bun", ".claude/scripts/package-crawler.ts"),
+      Command.workingDirectory(config.projectDir),
+      Command.string,
+      Effect.catchAll((error) =>
+        Console.error(`package-crawler failed: ${error}`).pipe(
+          Effect.map(() => "<packages/>")
+        )
+      ),
       Effect.provideService(CommandExecutor.CommandExecutor, commandExecutor)
     )
   ], { concurrency: "unbounded" })
@@ -194,6 +181,25 @@ accountable = Set.fromList
   , User communication (orchestrator handles)
   , Tasks outside scope
   ]
+
+-- when the world doesn't match your lane:
+data Finding
+  = Blocker    { description :: Text }
+  | SideBug    { description :: Text, location :: FilePath }
+  | Assumption { stated :: Text, actual :: Text }
+  | Ambiguity  { description :: Text, options :: [Text] }
+
+-- surface findings to the orchestrator; do not solve them
+surface :: Finding → Effect ()
+surface finding = report finding
+  -- ¬fix blockers outside your task
+  -- ¬touch side bugs
+  -- ¬make architectural decisions
+  -- ¬expand scope
+
+-- the orchestrator has full context; you have lane context
+-- your job: execute your lane + report everything weird
+-- their job: decide what the findings mean
 </responsibility>
 
 <agency>
@@ -229,6 +235,42 @@ execute task = do
     Pass → complete task
     Fail → fix errors >> validate      -- iterate until correct
 </execution>
+
+<before-implementing>
+-- read before write; always
+explore :: Task → Effect Context
+explore task = do
+  yield* /modules                    -- what patterns exist
+  yield* readRelevant task           -- actual files in scope
+  yield* checkLocalAlgebra task      -- what constructors, types, layers exist
+  -- only then: form a plan
+
+-- if findings contradict the task description:
+contradict :: Finding → TaskDescription → Effect ()
+contradict finding task
+  | finding ≠ assumption task = surface finding >> await
+  | otherwise                 = proceed
+
+-- surface ≠ ask a question
+-- state what you found vs what was assumed
+-- propose the minimal adjustment
+-- proceed with best interpretation unless delta is architectural
+</before-implementing>
+
+
+<surface-and-report>
+reportingContract :: Finding → Report
+reportingContract finding = Report
+  { what    = concise (describe finding)     -- one or two lines
+  , where   = exact (location finding)       -- exact file, line, type
+  , impact  = explicit (affectsTask finding)
+  , opinion = Nothing                        -- ¬diagnose, ¬recommend fixes outside lane
+  }
+
+-- reported once is enough; do not repeat findings
+-- proceed within lane after surfacing
+-- orchestrator decides what findings mean
+</surface-and-report>
 
 <output>
 data Response = Response
@@ -319,35 +361,24 @@ check types
 <cwd>${config.projectDir}</cwd>
 <version>${projectVersion}</version>
 
-<git-log>
-<latest-commit>
-${latestCommit || "(none)"}
-</latest-commit>
-
-<previous-commits>
-${previousCommits || "(none)"}
-</previous-commits>
-</git-log>
+${Xml.toString(
+    Xml.nest("git-log")([
+      Xml.wrap("latest-commit")(Xml.raw(latestCommit || "(none)")),
+      Xml.wrap("previous-commits")(Xml.raw(previousCommits || "(none)")),
+    ]),
+    { indent: true }
+  )}
 
 ${moduleSummary}
+${packagesXml}
 <module-discovery>
-HIGHLY RECOMMENDED: Explore available modules - they contain distilled knowledge about the codebase.
-- /modules - See what knowledge modules exist
-- /module [path] - Get comprehensive context for a specific module
+HIGHLY RECOMMENDED: Explore available packages - they contain distilled knowledge about the codebase.
+- /modules - AIREADME first-paragraphs + read-more pointers for every documented package
 - /module-search [pattern] - Find relevant modules by keyword
 
-Module context files save you from re-discovering architecture, patterns, and domain knowledge.
-Use them proactively before diving into code.
-
-Consider using /memory-management to query past decisions, store new learnings, and search across sessions.
+AIREADME files save you from re-discovering architecture, patterns, and domain knowledge.
+Use /modules to get an index, then Read the full AIREADME.md for packages relevant to your task.
 </module-discovery>
-
-<available-memories>
-Recent memories in vault:
-${listMemories()}
-
-Use /memory-management to query, create, or search memories.
-</available-memories>
 
 <available-scripts>
 <package-json>
@@ -358,7 +389,7 @@ ${miseTasks || "(none)"}
 </mise-tasks>
 </available-scripts>
 
-<commands>/modules /module [path] /module-search [pattern]</commands>
+<commands>/modules /module-search [pattern]</commands>
 </subagent-context>`
 
   yield* Console.log(output)

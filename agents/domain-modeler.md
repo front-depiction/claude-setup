@@ -49,7 +49,7 @@ no-native-temporal: Date -> DateTime.Utc, number(ms) -> Duration
 <acquire>
 acquire :: Problem -> Effect<(Skills, Context, ADTs), AcquisitionError, FileSystem>
 acquire problem = do
-  skills   <- loadSkills ["domain-modeling", "domain-predicates", "pattern-matching", "typeclass-design"]
+  skills   <- loadSkills ["domain-modeling", "pattern-matching"]
   docs     <- searchContext ".context/effect/" ["Data", "Schema", "Order", "Match", "Equal", "Equivalence"]
   existing <- findSimilarModules problem.domain
   tcDir    <- Glob "@/typeclass/*.ts"
@@ -137,9 +137,9 @@ state-transitions    → Data.TaggedEnum with $match and $is
 <skills>
 dispatch :: Problem -> Skill
 dispatch problem
-  | needsPredicates problem     = invoke "domain-predicates"
+  | needsPredicates problem     = invoke "domain-modeling"
   | needsPatternMatch problem   = invoke "pattern-matching"
-  | needsTypeclasses problem    = invoke "typeclass-design"
+  | needsTypeclasses problem    = invoke "domain-modeling"
   | needsFullDomain problem     = invoke "domain-modeling"
 </skills>
 

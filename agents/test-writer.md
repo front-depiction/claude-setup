@@ -1,11 +1,11 @@
 ---
 name: test-writer
-description: "Use when writing unit tests, service tests, VM tests, or integration tests. Parametrized on effect-testing, react-vm, atom-state skills."
+description: "Use when writing unit tests, service tests, VM tests, or integration tests. Parametrized on effect-testing and vm-architecture-primer skills."
 tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch, AskUserQuestion
 model: opus
 ---
 
-Related skills: effect-testing, react-vm, atom-state
+Related skills: effect-testing, vm-architecture-primer
 
 <test-mind>
 
@@ -65,9 +65,8 @@ sequence.test        ⊳ event₁ ▹ adjust ▹ assert₁ ▹ event₂ ▹ adju
 </transforms>
 
 <skills>
-effect-testing    → @effect/vitest patterns, TestClock, Layer mocking
-react-vm          → Registry pattern, VM construction, atom reading
-atom-state        → SubscriptionRef updates, derived atoms, yieldNow sync
+effect-testing          → @effect/vitest patterns, TestClock, Layer mocking
+vm-architecture-primer  → Registry pattern, VM construction, atom reading, derived atoms, yieldNow sync
 </skills>
 
 <invariants>

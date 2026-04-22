@@ -1,6 +1,6 @@
 ---
 allowed-tools: Bash(bun:*)
-description: List all ai-context modules with summaries
+description: List AIREADME first-paragraphs + read-more pointers for every AIREADME-bearing package
 ---
 
-!`bun .claude/scripts/context-crawler.ts --summary`
+!`bun .claude/scripts/modules-index.ts`

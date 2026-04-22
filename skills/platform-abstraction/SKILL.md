@@ -1,6 +1,6 @@
 ---
 name: platform-abstraction
-description: Use @effect/platform abstractions for cross-platform file I/O, process spawning, HTTP clients, and terminal operations. Apply this skill when writing code that interacts with the filesystem, spawns processes, makes HTTP requests, or performs console I/O to ensure portability across Node.js, Bun, and browser environments.
+description: Use @effect/platform abstractions for cross-platform file I/O, process spawning, HTTP clients, and terminal operations. Also covers layer provision for platform runtimes (NodeContext, BunContext, BrowserContext) and testing with mock layers. Apply this skill when writing code that interacts with the filesystem, spawns processes, makes HTTP requests, or performs console I/O, or when structuring entry points with platform-specific layer provision.
 ---
 
 # Platform Abstraction with @effect/platform
@@ -1100,5 +1100,67 @@ Effect Platform provides a complete abstraction layer over platform-specific API
 3. **Resource safety** - Automatic cleanup with Scope
 4. **Easy testing** - Mock services without touching the filesystem
 5. **Full Effect integration** - Compose with services, layers, and error handling
+
+---
+
+## Layer Composition
+
+**The golden rule: application code uses abstract interfaces; entry points provide platform-specific layers.**
+
+### Platform contexts
+
+Each platform provides a single context layer that wires all services:
+
+```typescript
+// Node.js
+import { NodeContext, NodeRuntime } from "@effect/platform-node"
+pipe(program, Effect.provide(NodeContext.layer), NodeRuntime.runMain)
+
+// Bun
+import { BunContext, BunRuntime } from "@effect/platform-bun"
+pipe(program, Effect.provide(BunContext.layer), BunRuntime.runMain)
+
+// Browser
+import { BrowserContext } from "@effect/platform-browser"
+pipe(program, Effect.provide(BrowserContext.layer), BrowserRuntime.runMain)
+```
+
+Each context provides: `FileSystem`, `Path`, `Terminal`, `CommandExecutor`.
+
+### Adding custom services
+
+```typescript
+const AppLayer = Layer.mergeAll(DatabaseLive, ConfigServiceLive, LoggerLive)
+
+pipe(
+  program,
+  Effect.provide(AppLayer),
+  Effect.provide(NodeContext.layer), // platform services last
+  NodeRuntime.runMain
+)
+```
+
+### Testing with mock layers
+
+Never import platform-specific modules in tests. Use `Layer.succeed` with mock implementations:
+
+```typescript
+const MockFileSystem = Layer.succeed(
+  FileSystem.FileSystem,
+  FileSystem.FileSystem.of({
+    readFileString: (path) => Effect.succeed(`mock content for ${path}`),
+    writeFileString: () => Effect.void,
+    exists: () => Effect.succeed(true),
+    makeDirectory: () => Effect.void,
+  })
+)
+```
+
+### Key principles
+
+1. Application code imports from `@effect/platform` (abstract); entry points import from `@effect/platform-node` / `-bun` / `-browser`
+2. One platform layer per runtime — do not mix
+3. Platform layer last in `Effect.provide` chain
+4. Only `main.ts` (or equivalent entry) should import platform-specific modules
 
 Always prefer Effect Platform abstractions over direct platform APIs for maximum portability, safety, and testability.

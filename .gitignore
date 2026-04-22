@@ -37,6 +37,12 @@ tmp/
 # md-typecheck output
 scripts/md-typecheck-output/
 
+# Runtime state
+.hook-state.json
+
+# Local symlinks pointing outside the repo
+skills/shadcn
+
 # Ignore all markdown files except CLAUDE.md and README.md
 *.md
 !CLAUDE.md
