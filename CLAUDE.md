@@ -581,6 +581,32 @@ separate instances     over  forced sharing across boundaries
   detail :: /skills platform-abstraction
 </layer-memoization>
 
+<layer-export-discipline>
+-- ∀ exported L :: Layer<Rout, E, RIn>  →  minimize RIn at export site
+
+provide(L) ⊇ direct(L)                    -- each layer provides its own direct deps
+¬bundle(transitive, at single site)       -- no central megabundle; doesn't scale
+
+-- memoization makes local provision free:
+--   MemoMap dedupes by reference; Layer.mergeAll(...directChildren) is idempotent.
+--   if every L obeys the rule, every child is RIn-minimal, and composition collapses.
+
+admissible(RIn) := { L' | ¬testable(L') }
+               ⊆ { transport, protocol, socket, controller-mocked-layer }
+               -- rare; live testing is the default
+
+default := pre-wire ∧ strip-on-demand
+-- prefer: ship L fully wired; tests strip the one layer they need to replace
+-- avoid:  ship L under-wired; every consumer re-wires the same deps
+-- harness is good enough that mocking is nearly never needed
+
+violations:
+  god-bundle  :: provide(L) ⊇ transitive(L)   -- central wiring, unmanageable
+  leaking-RIn :: provide(L) ⊋ direct(L)       -- consumer pays the difference
+
+downstream(consumer) := Layer.mergeAll(...topLevelLive)   -- flat, mechanical
+</layer-export-discipline>
+
 <module-conventions>
 -- file layout
 internal/module.ts                      -- impl, private ctors, mutable internals; no public exports

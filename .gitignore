@@ -39,6 +39,7 @@ scripts/md-typecheck-output/
 
 # Runtime state
 .hook-state.json
+scheduled_tasks.lock
 
 # Local symlinks pointing outside the repo
 skills/shadcn
