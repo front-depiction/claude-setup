@@ -13,7 +13,7 @@ import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { CommandExecutor, FileSystem, Path } from "@effect/platform"
 import type { PlatformError } from "@effect/platform/Error"
 import { Array, Console, Effect, Option, Order, pipe } from "effect"
-import * as Xml from "../../tools/layer-wire/xml/Xml.js"
+import * as Xml from "./lib/xml.ts"
 import { fetchHotnessCountMap } from "./lib/git-hotness.js"
 
 // ============================================================================

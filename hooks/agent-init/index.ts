@@ -11,7 +11,7 @@
 import { Effect, Console, Context, Layer, Data, Schema, pipe, Config, Array as Arr } from "effect"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Command, CommandExecutor } from "@effect/platform"
-import * as Xml from "../../../tools/layer-wire/xml/Xml.js"
+import * as Xml from "../../scripts/lib/xml.ts"
 
 // ============================================================================
 // Schemas & Types
